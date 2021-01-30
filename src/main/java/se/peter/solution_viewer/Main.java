@@ -67,8 +67,8 @@ public class Main extends SimpleApplication {
         assembly = assemblies.get(0);
         pieceNodes = new ArrayList<>();
         ColorRGBA[] colors = new ColorRGBA[]{ColorRGBA.Blue, ColorRGBA.Cyan, ColorRGBA.Yellow, ColorRGBA.Orange, ColorRGBA.Red, ColorRGBA.Brown, ColorRGBA.Pink};
-        for (int pieceNumber = 0; pieceNumber < assembly.getVoxelsByPiece().size(); pieceNumber++) {
-            int[][][] piece = assembly.getVoxelsByPiece().get(pieceNumber);
+        for (int pieceNumber = 1; pieceNumber <= assembly.getVoxelsByPiece().size(); pieceNumber++) {
+            int[][][] piece = assembly.getVoxelsByPiece().get(pieceNumber - 1);
             Node pieceNode = new Node();
             pieceNodes.add(pieceNode);
             //Material mat = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
@@ -79,11 +79,11 @@ public class Main extends SimpleApplication {
             mat.setTexture("NormalMap",
                     assetManager.loadTexture("Textures/Terrain/Pond/Pond_normal.png"));
             mat.setBoolean("UseMaterialColors", true);
-            mat.setColor("Diffuse", colors[pieceNumber]);
+            mat.setColor("Diffuse", colors[pieceNumber - 1]);
             mat.setColor("Specular", ColorRGBA.White);
             mat.setFloat("Shininess", 0f);  // [0,128]
 
-            //mat.getAdditionalRenderState().setWireframe(true);
+            //  mat.getAdditionalRenderState().setWireframe(true);
             for (int x = 0; x < piece.length; x++)
                 for (int y = 0; y < piece[0].length; y++)
                     for (int z = 0; z < piece[0][0].length; z++) {
@@ -96,6 +96,7 @@ public class Main extends SimpleApplication {
                         }
                     }
             rootNode.attachChild(pieceNode);
+            translate(assembly.getPositionState().getPieceMatrix(pieceNumber), pieceNode);
         }
         viewPort.setBackgroundColor(ColorRGBA.White);
 
@@ -133,16 +134,30 @@ public class Main extends SimpleApplication {
                             matrix[r][c] = (r == c) ? m[r][c] : m[r][c] * SPEED;
                         }
                     Node node = pieceNodes.get(piece - 1);
-                    float x = node.getLocalTranslation().x;
-                    float y = node.getLocalTranslation().y;
-                    float z = node.getLocalTranslation().z;
-                    float x1 = matrix[0][0] * x + matrix[0][1] * y + matrix[0][2] * z + matrix[0][3] + (matrix[0][0] + matrix[0][1] + matrix[0][2] - 1) / 2;
-                    float y1 = matrix[1][0] * x + matrix[1][1] * y + matrix[1][2] * z + matrix[1][3] + (matrix[1][0] + matrix[1][1] + matrix[1][2] - 1) / 2;
-                    float z1 = matrix[2][0] * x + matrix[2][1] * y + matrix[2][2] * z + matrix[2][3] + (matrix[2][0] + matrix[2][1] + matrix[2][2] - 1) / 2;
-                    node.setLocalTranslation(x1, y1, z1);
+                    translate(matrix, node);
                 }
             }
         }
+    }
+
+    private void translate(float[][] matrix, Node node) {
+        float x = node.getLocalTranslation().x;
+        float y = node.getLocalTranslation().y;
+        float z = node.getLocalTranslation().z;
+        float x1 = matrix[0][0] * x + matrix[0][1] * y + matrix[0][2] * z + matrix[0][3] + (matrix[0][0] + matrix[0][1] + matrix[0][2] - 1) / 2;
+        float y1 = matrix[1][0] * x + matrix[1][1] * y + matrix[1][2] * z + matrix[1][3] + (matrix[1][0] + matrix[1][1] + matrix[1][2] - 1) / 2;
+        float z1 = matrix[2][0] * x + matrix[2][1] * y + matrix[2][2] * z + matrix[2][3] + (matrix[2][0] + matrix[2][1] + matrix[2][2] - 1) / 2;
+        node.setLocalTranslation(x1, y1, z1);
+    }
+
+    private void translate(int[][] matrix, Node node) {
+        float x = node.getLocalTranslation().x;
+        float y = node.getLocalTranslation().y;
+        float z = node.getLocalTranslation().z;
+        float x1 = matrix[0][0] * x + matrix[0][1] * y + matrix[0][2] * z + matrix[0][3] + (matrix[0][0] + matrix[0][1] + matrix[0][2] - 1) / 2;
+        float y1 = matrix[1][0] * x + matrix[1][1] * y + matrix[1][2] * z + matrix[1][3] + (matrix[1][0] + matrix[1][1] + matrix[1][2] - 1) / 2;
+        float z1 = matrix[2][0] * x + matrix[2][1] * y + matrix[2][2] * z + matrix[2][3] + (matrix[2][0] + matrix[2][1] + matrix[2][2] - 1) / 2;
+        node.setLocalTranslation(x1, y1, z1);
     }
 
     @Override
