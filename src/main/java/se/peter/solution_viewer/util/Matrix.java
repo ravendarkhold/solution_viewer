@@ -48,8 +48,8 @@ public class Matrix {
         return new int[][]{{1, 0, 0, dx}, {0, 1, 0, dy}, {0, 0, 1, dz}, {0, 0, 0, 1}};
     }
 
-    public static int[][] scale2(int dx, int dy, int dz) {
-        return new int[][]{{2, 0, 0, 0}, {0, 2, 0, 0}, {0, 0, 2, 0}, {0, 0, 0, 1}};
+    public static int[][] scale(int dx, int dy, int dz) {
+        return new int[][]{{1, 0, 0, dx}, {0, 1, 0, dy}, {0, 0, 1, dz}, {0, 0, 0, 1}};
     }
 
     public static int[][] mult(int[][] m1, int[][] m2) {

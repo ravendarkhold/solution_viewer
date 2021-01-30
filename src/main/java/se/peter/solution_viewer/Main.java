@@ -6,24 +6,30 @@ import com.jme3.input.controls.ActionListener;
 import com.jme3.input.controls.KeyTrigger;
 import com.jme3.light.DirectionalLight;
 import com.jme3.material.Material;
-import com.jme3.material.RenderState;
 import com.jme3.math.ColorRGBA;
 import com.jme3.math.Vector3f;
-import com.jme3.renderer.queue.RenderQueue;
 import com.jme3.scene.Geometry;
 import com.jme3.scene.Node;
 import com.jme3.scene.shape.Box;
 import com.jme3.system.AppSettings;
 import se.peter.solution_viewer.importer.Importer;
 import se.peter.solution_viewer.puzzle.Assembly;
+import se.peter.solution_viewer.puzzle.PieceRotation;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
+import static java.lang.Math.floor;
+
 public class Main extends SimpleApplication {
 
     private static final String PAUSE_MAPPING_NAME = "asdfas";
+    public static final float SPEED = 0.005f;
+    private List<PieceRotation> moves;
+    private int time = 0;
+    private Assembly assembly;
+    private List<Node> pieceNodes;
 
     public static void main(String[] args) {
 
@@ -49,10 +55,17 @@ public class Main extends SimpleApplication {
         flyCam.setDragToRotate(true);
         flyCam.setMoveSpeed(50);
 
-        List<Assembly> assemblies = new Importer().loadAssemblies(new File("Y:\\Peter\\puzzles\\Own\\There and back again (Level 12 and 21 moves)\\There and back again.xmpuzzle"));
-
-        Assembly assembly = assemblies.get(0);
-        List<Node> pieceNodes = new ArrayList<>();
+        Importer importer = new Importer();
+        //File file = new File("Y:\\Peter\\puzzles\\Own\\There and back again (Level 12 and 21 moves)\\There and back again.xmpuzzle");
+        File file = new File("Y:\\Peter\\puzzles\\Others\\Alfons Eyckmans\\Cuckold.xmpuzzle");
+        List<Assembly> assemblies = importer.loadAssemblies(file);
+        moves = importer.loadMoves(file);
+        System.out.println("Total moves " + moves.size());
+        moves.forEach(m -> {
+            System.out.println(m);
+        });
+        assembly = assemblies.get(0);
+        pieceNodes = new ArrayList<>();
         ColorRGBA[] colors = new ColorRGBA[]{ColorRGBA.Blue, ColorRGBA.Cyan, ColorRGBA.Yellow, ColorRGBA.Orange, ColorRGBA.Red, ColorRGBA.Brown, ColorRGBA.Pink};
         for (int pieceNumber = 0; pieceNumber < assembly.getVoxelsByPiece().size(); pieceNumber++) {
             int[][][] piece = assembly.getVoxelsByPiece().get(pieceNumber);
@@ -68,7 +81,7 @@ public class Main extends SimpleApplication {
             mat.setBoolean("UseMaterialColors", true);
             mat.setColor("Diffuse", colors[pieceNumber]);
             mat.setColor("Specular", ColorRGBA.White);
-            mat.setFloat("Shininess", 64f);  // [0,128]
+            mat.setFloat("Shininess", 0f);  // [0,128]
 
             //mat.getAdditionalRenderState().setWireframe(true);
             for (int x = 0; x < piece.length; x++)
@@ -101,17 +114,39 @@ public class Main extends SimpleApplication {
 
             @Override
             public void onAction(String name, boolean isPressed, float tpf) {
-                if (!isPressed) {
-                    Node node = pieceNodes.get(1);
-                    node.setLocalTranslation(node.getLocalTranslation().x + 0.1f, node.getLocalTranslation().y, node.getLocalTranslation().z);
-                }
             }
         }, PAUSE_MAPPING_NAME);
     }
 
-    @Override
-    public void simpleUpdate(float tpf) {
-        //TODO: add update code
+    private void movePieces(int step) {
+        int moveIndex = (int) floor(step * SPEED);
+        if (moveIndex < moves.size()) {
+            PieceRotation move = moves.get(moveIndex);
+            //     System.out.println(moveIndex + ":" + move.getPieces() + ", " + move);
+            for (int piece = 1; piece <= assembly.getVoxelsByPiece().size(); piece++) {
+
+                if ((move.getPieces() >> piece & 1) == 1) {
+                    int[][] m = move.getMatrix();
+                    float[][] matrix = new float[m.length][m.length];
+                    for (int r = 0; r < 4; r++)
+                        for (int c = 0; c < 4; c++) {
+                            matrix[r][c] = (r == c) ? m[r][c] : m[r][c] * SPEED;
+                        }
+                    Node node = pieceNodes.get(piece - 1);
+                    float x = node.getLocalTranslation().x;
+                    float y = node.getLocalTranslation().y;
+                    float z = node.getLocalTranslation().z;
+                    float x1 = matrix[0][0] * x + matrix[0][1] * y + matrix[0][2] * z + matrix[0][3] + (matrix[0][0] + matrix[0][1] + matrix[0][2] - 1) / 2;
+                    float y1 = matrix[1][0] * x + matrix[1][1] * y + matrix[1][2] * z + matrix[1][3] + (matrix[1][0] + matrix[1][1] + matrix[1][2] - 1) / 2;
+                    float z1 = matrix[2][0] * x + matrix[2][1] * y + matrix[2][2] * z + matrix[2][3] + (matrix[2][0] + matrix[2][1] + matrix[2][2] - 1) / 2;
+                    node.setLocalTranslation(x1, y1, z1);
+                }
+            }
+        }
     }
 
+    @Override
+    public void simpleUpdate(float tpf) {
+        movePieces(++time);
+    }
 }

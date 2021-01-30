@@ -5,6 +5,7 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 import se.peter.solution_viewer.puzzle.Assembly;
+import se.peter.solution_viewer.puzzle.PieceRotation;
 import se.peter.solution_viewer.puzzle.Position;
 import se.peter.solution_viewer.puzzle.PositionState;
 import se.peter.solution_viewer.util.Matrix;
@@ -18,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.StringTokenizer;
+import java.util.stream.Collectors;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.ZipException;
 
@@ -169,9 +171,9 @@ public class Importer {
         return result;
     }
 
-    public void loadMoves(File file, List<Integer> moves) {
+    public List<PieceRotation> loadMoves(File file) {
         Document doc = read(file);
-
+        List<PieceRotation> moves = new ArrayList<>();
         org.w3c.dom.Node solutions = getChild(doc, "puzzle", "problems", "problem", "solutions");
         if (solutions == null) {
             throw new IllegalArgumentException("File contains no solutions.");
@@ -197,45 +199,66 @@ public class Importer {
                     initialZ.add(z);
                 }
 
-                org.w3c.dom.Node separation = getChild(solution, "separation");
-                if (separation != null) {
-                    int[] prevPosX = initialX.stream().mapToInt(v -> v).toArray();
-                    int[] prevPosY = initialY.stream().mapToInt(v -> v).toArray();
-                    int[] prevPosZ = initialZ.stream().mapToInt(v -> v).toArray();
-                    NodeList list = separation.getChildNodes();
-                    for (int i = 0; i < list.getLength(); i++) {
-                        Node child = list.item(i);
-                        if (child.getNodeName().equals("state")) {
-                            int[] posX = getInts(getChild(child, "dx").getTextContent());
-                            int[] posY = getInts(getChild(child, "dy").getTextContent());
-                            int[] posZ = getInts(getChild(child, "dz").getTextContent());
-                            //   System.out.println(Arrays.toString(posX) + " " + Arrays.toString(posY) + " " + Arrays.toString(posZ));
-                            for (int j = 0; j < 6; j++) {
-                                int pieces = 0;
-                                for (int l = 1; l < 5 && pieces == 0; l++) {
-                                    for (int k = 0; k < posX.length; k++) {
-                                        if (posX[k] == prevPosX[k] + dx[j] * l &&
-                                                posY[k] == prevPosY[k] + dy[j] * l &&
-                                                posZ[k] == prevPosZ[k] + dz[j] * l) {
-                                            pieces |= 1 << (k + 1);
-                                        }
-                                    }
-                                    if (pieces != 0) {
-                                        for (int m = 0; m < l; m++) {
-                                            //               System.out.println(State.describePieces(pieces, initialX.size()) + " " + j);
-                                            moves.add(pieces << 3 | j);
-                                        }
-                                    }
-                                }
-                            }
-                            prevPosX = posX;
-                            prevPosY = posY;
-                            prevPosZ = posZ;
-                        }
+                int[] prevPosX = initialX.stream().mapToInt(v -> v).toArray();
+                int[] prevPosY = initialY.stream().mapToInt(v -> v).toArray();
+                int[] prevPosZ = initialZ.stream().mapToInt(v -> v).toArray();
+                for (int separationIndex = 0; separationIndex < solution.getChildNodes().getLength(); separationIndex++) {
+                    Node separation = solution.getChildNodes().item(separationIndex);
+                    if (separation.getNodeName().equals("separation")) {
+                        moves.addAll(parseSeparation(separation, prevPosX, prevPosY, prevPosZ));
                     }
                 }
             }
         }
+        return moves;
+    }
+
+    private List<PieceRotation> parseSeparation(Node separation, int[] px, int[] py, int[] pz) {
+        List<PieceRotation> moves = new ArrayList<>();
+
+        Node piecesNode = getChild(separation, "pieces");
+        int pieceCount = Integer.parseInt(piecesNode.getAttributes().getNamedItem("count").getNodeValue());
+        String piecesString = piecesNode.getTextContent();
+        List<Integer> pieceIndex = Arrays.stream(piecesString.split(" ")).map(s -> Integer.parseInt(s)).collect(Collectors.toList());
+
+        NodeList list = separation.getChildNodes();
+
+        int[] prevPosX = pieceIndex.stream().mapToInt(index -> px[index]).toArray();
+        int[] prevPosY = pieceIndex.stream().mapToInt(index -> py[index]).toArray();
+        int[] prevPosZ = pieceIndex.stream().mapToInt(index -> pz[index]).toArray();
+        for (int i = 0; i < list.getLength(); i++) {
+            Node child = list.item(i);
+            if (child.getNodeName().equals("state")) {
+                int[] posX = getInts(getChild(child, "dx").getTextContent());
+                int[] posY = getInts(getChild(child, "dy").getTextContent());
+                int[] posZ = getInts(getChild(child, "dz").getTextContent());
+
+                int pieces = 0;
+                int last = -1;
+                for (int k = 0; k < pieceCount; k++) {
+                    int piece = pieceIndex.get(k);
+                    if (posX[k] != prevPosX[k] || posY[k] != prevPosY[k] || posZ[k] != prevPosZ[k]) {
+                        pieces |= 1 << (piece + 1);
+                        last = k;
+                    }
+                }
+
+                if (last != -1) {
+                    moves.add(new PieceRotation(pieces, Matrix.translate(posX[last] - prevPosX[last], posY[last] - prevPosY[last], posZ[last] - prevPosZ[last])));
+                }
+                prevPosX = posX;
+                prevPosY = posY;
+                prevPosZ = posZ;
+            } else if (child.getNodeName().equals("separation")) {
+                for (int j = 0; j < pieceCount; j++) {
+                    px[pieceIndex.get(j)] = prevPosX[j];
+                    py[pieceIndex.get(j)] = prevPosY[j];
+                    pz[pieceIndex.get(j)] = prevPosZ[j];
+                }
+                moves.addAll(parseSeparation(child, px, py, pz));
+            }
+        }
+        return moves;
     }
 
     private org.w3c.dom.Node getChild(org.w3c.dom.Node parent, String... nodeName) {
