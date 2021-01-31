@@ -1,6 +1,7 @@
 package se.peter.solution_viewer;
 
 import com.jme3.app.SimpleApplication;
+import com.jme3.input.ChaseCamera;
 import com.jme3.input.KeyInput;
 import com.jme3.input.controls.ActionListener;
 import com.jme3.input.controls.KeyTrigger;
@@ -52,18 +53,13 @@ public class Main extends SimpleApplication {
 
     @Override
     public void simpleInitApp() {
-        flyCam.setDragToRotate(true);
-        flyCam.setMoveSpeed(50);
 
         Importer importer = new Importer();
         //File file = new File("Y:\\Peter\\puzzles\\Own\\There and back again (Level 12 and 21 moves)\\There and back again.xmpuzzle");
         File file = new File("Y:\\Peter\\puzzles\\Others\\Alfons Eyckmans\\Cuckold.xmpuzzle");
         List<Assembly> assemblies = importer.loadAssemblies(file);
         moves = importer.loadMoves(file);
-        System.out.println("Total moves " + moves.size());
-        moves.forEach(m -> {
-            System.out.println(m);
-        });
+
         assembly = assemblies.get(0);
         pieceNodes = new ArrayList<>();
         ColorRGBA[] colors = new ColorRGBA[]{ColorRGBA.Blue, ColorRGBA.Cyan, ColorRGBA.Yellow, ColorRGBA.Orange, ColorRGBA.Red, ColorRGBA.Brown, ColorRGBA.Pink};
@@ -117,6 +113,11 @@ public class Main extends SimpleApplication {
             public void onAction(String name, boolean isPressed, float tpf) {
             }
         }, PAUSE_MAPPING_NAME);
+
+        flyCam.setEnabled(false);
+        ChaseCamera chaseCam = new ChaseCamera(cam, rootNode, inputManager);
+        chaseCam.setDefaultDistance(50f);
+        chaseCam.setDragToRotate(true);
     }
 
     private void movePieces(int step) {
@@ -163,5 +164,6 @@ public class Main extends SimpleApplication {
     @Override
     public void simpleUpdate(float tpf) {
         movePieces(++time);
+
     }
 }
