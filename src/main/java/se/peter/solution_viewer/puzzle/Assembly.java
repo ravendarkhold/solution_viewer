@@ -1,12 +1,14 @@
 package se.peter.solution_viewer.puzzle;
 
+import com.jme3.math.Transform;
+
 import java.util.List;
 
 public class Assembly {
     private final List<int[][][]> voxelsByPiece;
-    private final PositionState positionState;
+    private final List<Transform> positionState;
 
-    public Assembly(List<int[][][]> voxelsByPiece, PositionState positionState) {
+    public Assembly(List<int[][][]> voxelsByPiece, List<Transform> positionState) {
         this.voxelsByPiece = voxelsByPiece;
         this.positionState = positionState;
     }
@@ -15,7 +17,7 @@ public class Assembly {
         return voxelsByPiece;
     }
 
-    public PositionState getPositionState() {
+    public List<Transform> getPositionState() {
         return positionState;
     }
 }

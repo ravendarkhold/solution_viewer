@@ -1,14 +1,13 @@
 package se.peter.solution_viewer.importer;
 
+import com.jme3.math.Transform;
+import com.jme3.math.Vector3f;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 import se.peter.solution_viewer.puzzle.Assembly;
-import se.peter.solution_viewer.puzzle.PieceRotation;
 import se.peter.solution_viewer.puzzle.Position;
-import se.peter.solution_viewer.puzzle.PositionState;
-import se.peter.solution_viewer.util.Matrix;
 import se.peter.solution_viewer.util.Rotations;
 
 import javax.xml.parsers.DocumentBuilder;
@@ -25,9 +24,6 @@ import java.util.zip.ZipException;
 
 public class Importer {
     private static Rotations rot = new Rotations();
-    public static int dx[] = new int[]{-1, 0, 0, 1, 0, 0};
-    public static int dy[] = new int[]{0, -1, 0, 0, 1, 0};
-    public static int dz[] = new int[]{0, 0, -1, 0, 0, 1};
 
     public Document read(File puzzleFile) {
         DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
@@ -159,21 +155,21 @@ public class Importer {
                     sizeZ = Integer.max(sizeZ, s[0][0].length);
                 }
                 List<int[][][]> voxelsByPiece = new ArrayList<>();
-                List<int[][]> piecePosition = new ArrayList<>();
+                List<Transform> piecePosition = new ArrayList<>();
                 for (int i = 0; i < shapesInAssembly.size(); i++) {
                     voxelsByPiece.add(shapesInAssembly.get(i));
                     Position offset = shapeOffsetsInAssembly.get(i);
-                    piecePosition.add(Matrix.translate(offset.getX(), offset.getY(), offset.getZ()));
+                    piecePosition.add(new Transform(new Vector3f(offset.getX(), offset.getY(), offset.getZ())));
                 }
-                result.add(new Assembly(voxelsByPiece, new PositionState(piecePosition)));
+                result.add(new Assembly(voxelsByPiece, piecePosition));
             }
         }
         return result;
     }
 
-    public List<PieceRotation> loadMoves(File file) {
+    public List<List<Transform>> loadMoves(File file, List<Transform> initial) {
         Document doc = read(file);
-        List<PieceRotation> moves = new ArrayList<>();
+        List<List<Transform>> moves = new ArrayList<>();
         org.w3c.dom.Node solutions = getChild(doc, "puzzle", "problems", "problem", "solutions");
         if (solutions == null) {
             throw new IllegalArgumentException("File contains no solutions.");
@@ -181,31 +177,10 @@ public class Importer {
         for (int nodeIndex = 0; nodeIndex < solutions.getChildNodes().getLength(); nodeIndex++) {
             Node solution = solutions.getChildNodes().item(nodeIndex);
             if (solution.getNodeType() == 1) {
-                org.w3c.dom.Node assembly = getChild(solution, "assembly");
-                StringTokenizer tokenizer = new StringTokenizer(assembly.getTextContent(), " ");
-                int shape = 0;
-                List<Integer> initialX = new ArrayList<>();
-                List<Integer> initialY = new ArrayList<>();
-                List<Integer> initialZ = new ArrayList<>();
-
-                while (tokenizer.hasMoreTokens()) {
-                    int x = Integer.parseInt(tokenizer.nextToken());
-                    int y = Integer.parseInt(tokenizer.nextToken());
-                    int z = Integer.parseInt(tokenizer.nextToken());
-                    int originalRotation = Integer.parseInt(tokenizer.nextToken());
-
-                    initialX.add(x);
-                    initialY.add(y);
-                    initialZ.add(z);
-                }
-
-                int[] prevPosX = initialX.stream().mapToInt(v -> v).toArray();
-                int[] prevPosY = initialY.stream().mapToInt(v -> v).toArray();
-                int[] prevPosZ = initialZ.stream().mapToInt(v -> v).toArray();
                 for (int separationIndex = 0; separationIndex < solution.getChildNodes().getLength(); separationIndex++) {
                     Node separation = solution.getChildNodes().item(separationIndex);
                     if (separation.getNodeName().equals("separation")) {
-                        moves.addAll(parseSeparation(separation, prevPosX, prevPosY, prevPosZ));
+                        moves.addAll(parseSeparation(separation, initial));
                     }
                 }
             }
@@ -213,19 +188,16 @@ public class Importer {
         return moves;
     }
 
-    private List<PieceRotation> parseSeparation(Node separation, int[] px, int[] py, int[] pz) {
-        List<PieceRotation> moves = new ArrayList<>();
+    private List<List<Transform>> parseSeparation(Node separation, List<Transform> previous) {
+        List<List<Transform>> moves = new ArrayList<>();
 
         Node piecesNode = getChild(separation, "pieces");
         int pieceCount = Integer.parseInt(piecesNode.getAttributes().getNamedItem("count").getNodeValue());
         String piecesString = piecesNode.getTextContent();
-        List<Integer> pieceIndex = Arrays.stream(piecesString.split(" ")).map(s -> Integer.parseInt(s)).collect(Collectors.toList());
+        List<Integer> pieceIndex = Arrays.stream(piecesString.split(" ")).map(Integer::parseInt).collect(Collectors.toList());
 
         NodeList list = separation.getChildNodes();
 
-        int[] prevPosX = pieceIndex.stream().mapToInt(index -> px[index]).toArray();
-        int[] prevPosY = pieceIndex.stream().mapToInt(index -> py[index]).toArray();
-        int[] prevPosZ = pieceIndex.stream().mapToInt(index -> pz[index]).toArray();
         for (int i = 0; i < list.getLength(); i++) {
             Node child = list.item(i);
             if (child.getNodeName().equals("state")) {
@@ -233,29 +205,18 @@ public class Importer {
                 int[] posY = getInts(getChild(child, "dy").getTextContent());
                 int[] posZ = getInts(getChild(child, "dz").getTextContent());
 
-                int pieces = 0;
-                int last = -1;
+                List<Transform> transforms = new ArrayList<>(previous);
                 for (int k = 0; k < pieceCount; k++) {
                     int piece = pieceIndex.get(k);
-                    if (posX[k] != prevPosX[k] || posY[k] != prevPosY[k] || posZ[k] != prevPosZ[k]) {
-                        pieces |= 1 << (piece + 1);
-                        last = k;
-                    }
+                    transforms.set(piece, new Transform(new Vector3f(posX[k], posY[k], posZ[k])));
                 }
 
-                if (last != -1) {
-                    moves.add(new PieceRotation(pieces, Matrix.translate(posX[last] - prevPosX[last], posY[last] - prevPosY[last], posZ[last] - prevPosZ[last])));
+                if (!transforms.equals(previous)) {
+                    moves.add(transforms);
+                    previous = transforms;
                 }
-                prevPosX = posX;
-                prevPosY = posY;
-                prevPosZ = posZ;
             } else if (child.getNodeName().equals("separation")) {
-                for (int j = 0; j < pieceCount; j++) {
-                    px[pieceIndex.get(j)] = prevPosX[j];
-                    py[pieceIndex.get(j)] = prevPosY[j];
-                    pz[pieceIndex.get(j)] = prevPosZ[j];
-                }
-                moves.addAll(parseSeparation(child, px, py, pz));
+                moves.addAll(parseSeparation(child, previous));
             }
         }
         return moves;

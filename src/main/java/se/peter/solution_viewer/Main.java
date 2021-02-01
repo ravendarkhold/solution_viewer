@@ -8,6 +8,7 @@ import com.jme3.input.controls.KeyTrigger;
 import com.jme3.light.DirectionalLight;
 import com.jme3.material.Material;
 import com.jme3.math.ColorRGBA;
+import com.jme3.math.Transform;
 import com.jme3.math.Vector3f;
 import com.jme3.scene.Geometry;
 import com.jme3.scene.Node;
@@ -15,7 +16,6 @@ import com.jme3.scene.shape.Box;
 import com.jme3.system.AppSettings;
 import se.peter.solution_viewer.importer.Importer;
 import se.peter.solution_viewer.puzzle.Assembly;
-import se.peter.solution_viewer.puzzle.PieceRotation;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -26,9 +26,9 @@ import static java.lang.Math.floor;
 public class Main extends SimpleApplication {
 
     private static final String PAUSE_MAPPING_NAME = "asdfas";
-    public static final float SPEED = 0.005f;
-    private List<PieceRotation> moves;
-    private int time = 0;
+    public static final float SPEED = 0.5f;
+    private List<List<Transform>> moves;
+    private float time = 0;
     private Assembly assembly;
     private List<Node> pieceNodes;
 
@@ -55,12 +55,22 @@ public class Main extends SimpleApplication {
     public void simpleInitApp() {
 
         Importer importer = new Importer();
-        //File file = new File("Y:\\Peter\\puzzles\\Own\\There and back again (Level 12 and 21 moves)\\There and back again.xmpuzzle");
-        File file = new File("Y:\\Peter\\puzzles\\Others\\Alfons Eyckmans\\Cuckold.xmpuzzle");
+        File file = new File("Y:\\Peter\\puzzles\\Own\\There and back again (Level 12 and 21 moves)\\There and back again.xmpuzzle");
+        //   File file = new File("Y:\\Peter\\puzzles\\Others\\Alfons Eyckmans\\Cuckold.xmpuzzle");
         List<Assembly> assemblies = importer.loadAssemblies(file);
-        moves = importer.loadMoves(file);
-
         assembly = assemblies.get(0);
+
+        for (int i = 0; i < assembly.getVoxelsByPiece().size(); i++)
+            System.out.println(assembly.getPositionState().get(i).getTranslation());
+
+        moves = importer.loadMoves(file, assembly.getPositionState());
+
+        moves.forEach(m -> {
+            System.out.println("--------");
+            for (int i = 0; i < assembly.getVoxelsByPiece().size(); i++)
+                System.out.println(m.get(i).getTranslation());
+        });
+
         pieceNodes = new ArrayList<>();
         ColorRGBA[] colors = new ColorRGBA[]{ColorRGBA.Blue, ColorRGBA.Cyan, ColorRGBA.Yellow, ColorRGBA.Orange, ColorRGBA.Red, ColorRGBA.Brown, ColorRGBA.Pink};
         for (int pieceNumber = 1; pieceNumber <= assembly.getVoxelsByPiece().size(); pieceNumber++) {
@@ -92,7 +102,8 @@ public class Main extends SimpleApplication {
                         }
                     }
             rootNode.attachChild(pieceNode);
-            translate(assembly.getPositionState().getPieceMatrix(pieceNumber), pieceNode);
+
+            pieceNode.setLocalTransform(assembly.getPositionState().get(pieceNumber - 1));
         }
         viewPort.setBackgroundColor(ColorRGBA.White);
 
@@ -120,50 +131,33 @@ public class Main extends SimpleApplication {
         chaseCam.setDragToRotate(true);
     }
 
-    private void movePieces(int step) {
-        int moveIndex = (int) floor(step * SPEED);
+    private void movePieces() {
+        int moveIndex = (int) floor(time * SPEED);
         if (moveIndex < moves.size()) {
-            PieceRotation move = moves.get(moveIndex);
-            //     System.out.println(moveIndex + ":" + move.getPieces() + ", " + move);
-            for (int piece = 1; piece <= assembly.getVoxelsByPiece().size(); piece++) {
-
-                if ((move.getPieces() >> piece & 1) == 1) {
-                    int[][] m = move.getMatrix();
-                    float[][] matrix = new float[m.length][m.length];
-                    for (int r = 0; r < 4; r++)
-                        for (int c = 0; c < 4; c++) {
-                            matrix[r][c] = (r == c) ? m[r][c] : m[r][c] * SPEED;
-                        }
-                    Node node = pieceNodes.get(piece - 1);
-                    translate(matrix, node);
+            float fraction = (time * SPEED - moveIndex);
+            for (int piece = 0; piece < assembly.getVoxelsByPiece().size(); piece++) {
+                Transform t0;
+                if (moveIndex > 0) {
+                    t0 = moves.get(moveIndex - 1).get(piece);
+                } else {
+                    t0 = assembly.getPositionState().get(piece);
                 }
+                Transform t1 = moves.get(moveIndex).get(piece);
+
+                Node node = pieceNodes.get(piece);
+
+                Transform t = new Transform();
+                t.interpolateTransforms(t0, t1, fraction);
+                node.setLocalTransform(t);
             }
+        } else {
+            time = 0;
         }
-    }
-
-    private void translate(float[][] matrix, Node node) {
-        float x = node.getLocalTranslation().x;
-        float y = node.getLocalTranslation().y;
-        float z = node.getLocalTranslation().z;
-        float x1 = matrix[0][0] * x + matrix[0][1] * y + matrix[0][2] * z + matrix[0][3] + (matrix[0][0] + matrix[0][1] + matrix[0][2] - 1) / 2;
-        float y1 = matrix[1][0] * x + matrix[1][1] * y + matrix[1][2] * z + matrix[1][3] + (matrix[1][0] + matrix[1][1] + matrix[1][2] - 1) / 2;
-        float z1 = matrix[2][0] * x + matrix[2][1] * y + matrix[2][2] * z + matrix[2][3] + (matrix[2][0] + matrix[2][1] + matrix[2][2] - 1) / 2;
-        node.setLocalTranslation(x1, y1, z1);
-    }
-
-    private void translate(int[][] matrix, Node node) {
-        float x = node.getLocalTranslation().x;
-        float y = node.getLocalTranslation().y;
-        float z = node.getLocalTranslation().z;
-        float x1 = matrix[0][0] * x + matrix[0][1] * y + matrix[0][2] * z + matrix[0][3] + (matrix[0][0] + matrix[0][1] + matrix[0][2] - 1) / 2;
-        float y1 = matrix[1][0] * x + matrix[1][1] * y + matrix[1][2] * z + matrix[1][3] + (matrix[1][0] + matrix[1][1] + matrix[1][2] - 1) / 2;
-        float z1 = matrix[2][0] * x + matrix[2][1] * y + matrix[2][2] * z + matrix[2][3] + (matrix[2][0] + matrix[2][1] + matrix[2][2] - 1) / 2;
-        node.setLocalTranslation(x1, y1, z1);
     }
 
     @Override
     public void simpleUpdate(float tpf) {
-        movePieces(++time);
-
+        time += tpf;
+        movePieces();
     }
 }
