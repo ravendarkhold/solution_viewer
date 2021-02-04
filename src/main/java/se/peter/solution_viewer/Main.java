@@ -20,13 +20,14 @@ import se.peter.solution_viewer.puzzle.Assembly;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.IntStream;
 
 import static java.lang.Math.floor;
 
 public class Main extends SimpleApplication {
 
     private static final String PAUSE_MAPPING_NAME = "asdfas";
-    public static final float SPEED = 0.5f;
+    public static final float SPEED = 2.5f;
     private List<List<Transform>> moves;
     private float time = 0;
     private Assembly assembly;
@@ -55,31 +56,31 @@ public class Main extends SimpleApplication {
     public void simpleInitApp() {
 
         Importer importer = new Importer();
-        File file = new File("Y:\\Peter\\puzzles\\Own\\There and back again (Level 12 and 21 moves)\\There and back again.xmpuzzle");
-        //   File file = new File("Y:\\Peter\\puzzles\\Others\\Alfons Eyckmans\\Cuckold.xmpuzzle");
+        //File file = new File("Y:\\Peter\\puzzles\\Own\\There and back again (Level 12 and 21 moves)\\There and back again.xmpuzzle");
+        //File file = new File("Y:\\Peter\\puzzles\\Others\\Alfons Eyckmans\\Cuckold.xmpuzzle");
+        //File file = new File("Y:\\Peter\\puzzles\\Others\\Juno\\Keep_I_on_the_Burr_SolutionFile.xmpuzzle");
+        File file = new File("Y:\\Peter\\puzzles\\Others\\Don Closterman\\C-6-216-14-17.xmpuzzle");
+
         List<Assembly> assemblies = importer.loadAssemblies(file);
         assembly = assemblies.get(0);
-
-        for (int i = 0; i < assembly.getVoxelsByPiece().size(); i++)
-            System.out.println(assembly.getPositionState().get(i).getTranslation());
-
+        int pieceCount = assembly.getVoxelsByPiece().size();
         moves = importer.loadMoves(file, assembly.getPositionState());
 
-        moves.forEach(m -> {
-            System.out.println("--------");
-            for (int i = 0; i < assembly.getVoxelsByPiece().size(); i++)
-                System.out.println(m.get(i).getTranslation());
-        });
+//        moves.forEach(m -> {
+//            System.out.println("--------");
+//            for (int i = 0; i < assembly.getVoxelsByPiece().size(); i++)
+//                System.out.println(m.get(i).getTranslation());
+//        });
 
         pieceNodes = new ArrayList<>();
-        ColorRGBA[] colors = new ColorRGBA[]{ColorRGBA.Blue, ColorRGBA.Cyan, ColorRGBA.Yellow, ColorRGBA.Orange, ColorRGBA.Red, ColorRGBA.Brown, ColorRGBA.Pink};
-        for (int pieceNumber = 1; pieceNumber <= assembly.getVoxelsByPiece().size(); pieceNumber++) {
+        ColorRGBA[] colors = IntStream.range(0, pieceCount).mapToObj(i -> ColorRGBA.randomColor()).toArray(ColorRGBA[]::new);
+
+        for (int pieceNumber = 1; pieceNumber <= pieceCount; pieceNumber++) {
             int[][][] piece = assembly.getVoxelsByPiece().get(pieceNumber - 1);
             Node pieceNode = new Node();
             pieceNodes.add(pieceNode);
-            //Material mat = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
             Material mat = new Material(assetManager, "Common/MatDefs/Light/Lighting.j3md");
-            //mat.setColor("Color", colors[pieceNumber]);
+
             mat.setTexture("DiffuseMap",
                     assetManager.loadTexture("Textures/Terrain/Pond/Pond.jpg"));
             mat.setTexture("NormalMap",

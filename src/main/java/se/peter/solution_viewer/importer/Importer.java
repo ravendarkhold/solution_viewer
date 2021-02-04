@@ -1,5 +1,6 @@
 package se.peter.solution_viewer.importer;
 
+import com.jme3.math.Quaternion;
 import com.jme3.math.Transform;
 import com.jme3.math.Vector3f;
 import org.w3c.dom.Document;
@@ -8,7 +9,6 @@ import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 import se.peter.solution_viewer.puzzle.Assembly;
 import se.peter.solution_viewer.puzzle.Position;
-import se.peter.solution_viewer.util.Rotations;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -23,7 +23,32 @@ import java.util.zip.GZIPInputStream;
 import java.util.zip.ZipException;
 
 public class Importer {
-    private static Rotations rot = new Rotations();
+    private static int[][] rotationMatrices = {
+            {1, 0, 0, 0, 1, 0, 0, 0, 1},
+            {1, 0, 0, 0, 0, -1, 0, 1, 0},
+            {1, 0, 0, 0, -1, 0, 0, 0, -1},
+            {1, 0, 0, 0, 0, 1, 0, -1, 0},
+            {0, 0, -1, 0, 1, 0, 1, 0, 0},
+            {0, -1, 0, 0, 0, -1, 1, 0, 0},
+            {0, 0, 1, 0, -1, 0, 1, 0, 0},
+            {0, 1, 0, 0, 0, 1, 1, 0, 0},
+            {-1, 0, 0, 0, 1, 0, 0, 0, -1},
+            {-1, 0, 0, 0, 0, -1, 0, -1, 0},
+            {-1, 0, 0, 0, -1, 0, 0, 0, 1},
+            {-1, 0, 0, 0, 0, 1, 0, 1, 0},
+            {0, 0, 1, 0, 1, 0, -1, 0, 0},
+            {0, 1, 0, 0, 0, -1, -1, 0, 0},
+            {0, 0, -1, 0, -1, 0, -1, 0, 0},
+            {0, -1, 0, 0, 0, 1, -1, 0, 0},
+            {0, -1, 0, 1, 0, 0, 0, 0, 1},
+            {0, 0, 1, 1, 0, 0, 0, 1, 0},
+            {0, 1, 0, 1, 0, 0, 0, 0, -1},
+            {0, 0, -1, 1, 0, 0, 0, -1, 0},
+            {0, 1, 0, -1, 0, 0, 0, 0, 1},
+            {0, 0, -1, -1, 0, 0, 0, 1, 0},
+            {0, -1, 0, -1, 0, 0, 0, 0, -1},
+            {0, 0, 1, -1, 0, 0, 0, -1, 0}
+    };
 
     public Document read(File puzzleFile) {
         DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
@@ -120,6 +145,7 @@ public class Importer {
                 StringTokenizer tokenizer = new StringTokenizer(assembly.getTextContent(), " ");
                 int shape = 0;
 
+                List<Quaternion> rotations = new ArrayList<>();
                 List<int[][][]> shapesInAssembly = new ArrayList<>();
                 List<Position> shapeOffsetsInAssembly = new ArrayList<>();
                 while (tokenizer.hasMoreTokens()) {
@@ -127,21 +153,16 @@ public class Importer {
                     int y = Integer.parseInt(tokenizer.nextToken());
                     int z = Integer.parseInt(tokenizer.nextToken());
                     int originalRotation = Integer.parseInt(tokenizer.nextToken());
-                    Integer[] rotationMap = new Integer[]{
-                            0, 11, 12, 23,
-                            1, 8, 15, 22,
-                            2, 9, 14, 21,
-                            3, 10, 13, 20,
-                            7, 4, 5, 6,
-                            17, 18, 19, 16
-                    };
-                    int rotation = rotationMap[originalRotation];
 
                     int[][][] shape1 = shapes.get(shapesInProblem.get(shape));
-                    int[][][] shape2 = rotate(shape1, rot.getRotatedPosition(shape1.length, shape1[0].length, shape1[0][0].length)[rotation]);
-                    Position originPos = rot.getRotatedPosition(shape1.length, shape1[0].length, shape1[0][0].length)[rotation][0][0][0];
-                    shapesInAssembly.add(shape2);
-                    shapeOffsetsInAssembly.add(new Position(x - originPos.getX(), y - originPos.getY(), z - originPos.getZ()));
+                    int[] rotationMatrix = rotationMatrices[originalRotation];
+                    rotations.add(new Quaternion().fromRotationMatrix(
+                            rotationMatrix[0], rotationMatrix[1], rotationMatrix[2],
+                            rotationMatrix[3], rotationMatrix[4], rotationMatrix[5],
+                            rotationMatrix[6], rotationMatrix[7], rotationMatrix[8]
+                    ));
+                    shapesInAssembly.add(shape1);
+                    shapeOffsetsInAssembly.add(new Position(x, y, z));
 
                     shape++;
                 }
@@ -159,7 +180,9 @@ public class Importer {
                 for (int i = 0; i < shapesInAssembly.size(); i++) {
                     voxelsByPiece.add(shapesInAssembly.get(i));
                     Position offset = shapeOffsetsInAssembly.get(i);
-                    piecePosition.add(new Transform(new Vector3f(offset.getX(), offset.getY(), offset.getZ())));
+                    Transform transform = new Transform(new Vector3f(offset.getX(), offset.getY(), offset.getZ()));
+                    transform.setRotation(rotations.get(i));
+                    piecePosition.add(transform);
                 }
                 result.add(new Assembly(voxelsByPiece, piecePosition));
             }
@@ -208,7 +231,9 @@ public class Importer {
                 List<Transform> transforms = new ArrayList<>(previous);
                 for (int k = 0; k < pieceCount; k++) {
                     int piece = pieceIndex.get(k);
-                    transforms.set(piece, new Transform(new Vector3f(posX[k], posY[k], posZ[k])));
+                    Transform transform = new Transform(new Vector3f(posX[k], posY[k], posZ[k]));
+                    transform.setRotation(previous.get(piece).getRotation());
+                    transforms.set(piece, transform);
                 }
 
                 if (!transforms.equals(previous)) {
@@ -244,31 +269,5 @@ public class Importer {
         }
 
         return result.stream().mapToInt(v -> v).toArray();
-    }
-
-    private int[][][] rotate(int[][][] shape, Position[][][] rotatedPosition) {
-        List<Position> boundaries = List.of(
-                rotatedPosition[0][0][0],
-                rotatedPosition[0][0][shape[0][0].length - 1],
-                rotatedPosition[0][shape[0].length - 1][0],
-                rotatedPosition[0][shape[0].length - 1][shape[0][0].length - 1],
-                rotatedPosition[shape.length - 1][0][0],
-                rotatedPosition[shape.length - 1][0][shape[0][0].length - 1],
-                rotatedPosition[shape.length - 1][shape[0].length - 1][0],
-                rotatedPosition[shape.length - 1][shape[0].length - 1][shape[0][0].length - 1]);
-        int maxX = boundaries.stream().mapToInt(Position::getX).max().getAsInt();
-        int maxY = boundaries.stream().mapToInt(Position::getY).max().getAsInt();
-        int maxZ = boundaries.stream().mapToInt(Position::getZ).max().getAsInt();
-
-        int[][][] newshape = new int[maxX + 1][maxY + 1][maxZ + 1];
-        for (int x = 0; x < shape.length; x++) {
-            for (int y = 0; y < shape[0].length; y++) {
-                for (int z = 0; z < shape[0][0].length; z++) {
-                    Position pos = rotatedPosition[x][y][z];
-                    newshape[pos.getX()][pos.getY()][pos.getZ()] = shape[x][y][z];
-                }
-            }
-        }
-        return newshape;
     }
 }
