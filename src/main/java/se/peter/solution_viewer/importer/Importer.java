@@ -4,6 +4,7 @@ import com.jme3.math.Quaternion;
 import com.jme3.math.Transform;
 import com.jme3.math.Vector3f;
 import org.w3c.dom.Document;
+import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
@@ -14,10 +15,7 @@ import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 import java.io.*;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.StringTokenizer;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.ZipException;
@@ -139,8 +137,11 @@ public class Importer {
         for (int i = 0; i < problem_shapes.getChildNodes().getLength(); i++) {
             org.w3c.dom.Node item = problem_shapes.getChildNodes().item(i);
             if (item.getNodeType() == org.w3c.dom.Node.ELEMENT_NODE) {
-                for (int j = 0; j < Integer.parseInt(item.getAttributes().getNamedItem("count").getNodeValue()); j++)
-                    shapesInProblem.add(Integer.parseInt(item.getAttributes().getNamedItem("id").getNodeValue()));
+                NamedNodeMap attributes = item.getAttributes();
+                Node count = attributes.getNamedItem("count");
+                int piecesCountInProblem = Integer.parseInt((count != null ? count : attributes.getNamedItem("max")).getNodeValue());
+                for (int j = 0; j < piecesCountInProblem; j++)
+                    shapesInProblem.add(Integer.parseInt(attributes.getNamedItem("id").getNodeValue()));
             }
         }
 
@@ -160,21 +161,27 @@ public class Importer {
                 List<int[][][]> shapesInAssembly = new ArrayList<>();
                 List<Position> shapeOffsetsInAssembly = new ArrayList<>();
                 while (tokenizer.hasMoreTokens()) {
-                    int x = Integer.parseInt(tokenizer.nextToken());
-                    int y = Integer.parseInt(tokenizer.nextToken());
-                    int z = Integer.parseInt(tokenizer.nextToken());
-                    int originalRotation = Integer.parseInt(tokenizer.nextToken());
+                    String token = tokenizer.nextToken();
+                    if (!token.equals("x")) {
+                        int x = Integer.parseInt(token);
+                        int y = Integer.parseInt(tokenizer.nextToken());
+                        int z = Integer.parseInt(tokenizer.nextToken());
+                        int originalRotation = Integer.parseInt(tokenizer.nextToken());
 
-                    int[][][] shape1 = shapes.get(shapesInProblem.get(shape));
-                    int[] rotationMatrix = rotationMatrices[originalRotation];
-                    rotations.add(new Quaternion().fromRotationMatrix(
-                            rotationMatrix[0], rotationMatrix[1], rotationMatrix[2],
-                            rotationMatrix[3], rotationMatrix[4], rotationMatrix[5],
-                            rotationMatrix[6], rotationMatrix[7], rotationMatrix[8]
-                    ));
-                    shapesInAssembly.add(shape1);
-                    shapeOffsetsInAssembly.add(new Position(x, y, z));
-
+                        int[][][] shape1 = shapes.get(shapesInProblem.get(shape));
+                        int[] rotationMatrix = rotationMatrices[originalRotation];
+                        rotations.add(new Quaternion().fromRotationMatrix(
+                                rotationMatrix[0], rotationMatrix[1], rotationMatrix[2],
+                                rotationMatrix[3], rotationMatrix[4], rotationMatrix[5],
+                                rotationMatrix[6], rotationMatrix[7], rotationMatrix[8]
+                        ));
+                        shapesInAssembly.add(shape1);
+                        shapeOffsetsInAssembly.add(new Position(x, y, z));
+                    } else {
+                        rotations.add(null);
+                        shapesInAssembly.add(null);
+                        shapeOffsetsInAssembly.add(null);
+                    }
                     shape++;
                 }
 
@@ -182,23 +189,31 @@ public class Importer {
                 int sizeY = 0;
                 int sizeZ = 0;
                 for (int[][][] s : shapesInAssembly) {
-                    sizeX = Integer.max(sizeX, s.length);
-                    sizeY = Integer.max(sizeY, s[0].length);
-                    sizeZ = Integer.max(sizeZ, s[0][0].length);
+                    if (s != null) {
+                        sizeX = Integer.max(sizeX, s.length);
+                        sizeY = Integer.max(sizeY, s[0].length);
+                        sizeZ = Integer.max(sizeZ, s[0][0].length);
+                    }
                 }
                 List<int[][][]> voxelsByPiece = new ArrayList<>();
                 List<Transform> piecePosition = new ArrayList<>();
                 for (int i = 0; i < shapesInAssembly.size(); i++) {
-                    voxelsByPiece.add(shapesInAssembly.get(i));
-                    Position offset = shapeOffsetsInAssembly.get(i);
-                    Transform transform = new Transform(new Vector3f(offset.getX(), offset.getY(), offset.getZ()));
-                    transform.setRotation(rotations.get(i));
-                    piecePosition.add(transform);
+                    int[][][] s = shapesInAssembly.get(i);
+                    if (s != null) {
+                        voxelsByPiece.add(s);
+                        Position offset = shapeOffsetsInAssembly.get(i);
+                        Transform transform = new Transform(new Vector3f(offset.getX(), offset.getY(), offset.getZ()));
+                        transform.setRotation(rotations.get(i));
+                        piecePosition.add(transform);
+                    } else {
+                        piecePosition.add(null);
+                    }
                 }
                 int assemblyNumber = getIntegerAttribute(solution, "asmNum");
                 int solutionNumber = getIntegerAttribute(solution, "solNum");
 
-                result.add(new Assembly(assemblyNumber, solutionNumber, voxelsByPiece, piecePosition, loadMoves(solution, piecePosition)));
+                List<Transform> positionState = piecePosition.stream().filter(Objects::nonNull).collect(Collectors.toList());
+                result.add(new Assembly(assemblyNumber, solutionNumber, voxelsByPiece, positionState, loadMoves(solution, piecePosition)));
             }
         }
         return result;
@@ -248,7 +263,7 @@ public class Importer {
                 }
 
                 if (!transforms.equals(previous)) {
-                    moves.add(transforms);
+                    moves.add(transforms.stream().filter(Objects::nonNull).collect(Collectors.toList()));
                     previous = transforms;
                 }
             } else if (child.getNodeName().equals("separation")) {
