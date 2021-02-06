@@ -27,11 +27,12 @@ import static java.lang.Math.floor;
 public class Main extends SimpleApplication {
 
     private static final String PAUSE_MAPPING_NAME = "asdfas";
-    public static final float SPEED = 2.5f;
+    public static final float SPEED = 1f;
     private List<List<Transform>> moves;
     private float time = 0;
     private Assembly assembly;
     private List<Node> pieceNodes;
+    private boolean running = false;
 
     public static void main(String[] args) {
 
@@ -59,7 +60,8 @@ public class Main extends SimpleApplication {
         //File file = new File("Y:\\Peter\\puzzles\\Own\\There and back again (Level 12 and 21 moves)\\There and back again.xmpuzzle");
         //File file = new File("Y:\\Peter\\puzzles\\Others\\Alfons Eyckmans\\Cuckold.xmpuzzle");
         //File file = new File("Y:\\Peter\\puzzles\\Others\\Juno\\Keep_I_on_the_Burr_SolutionFile.xmpuzzle");
-        File file = new File("Y:\\Peter\\puzzles\\Others\\Don Closterman\\C-6-216-14-17.xmpuzzle");
+        //   File file = new File("Y:\\Peter\\puzzles\\Others\\Don Closterman\\C-6-216-14-17.xmpuzzle");
+        File file = new File("Y:\\Peter\\puzzles\\Others\\Stephen Baumeggar\\excaliburr.xmpuzzle");
 
         List<Assembly> assemblies = importer.loadAssemblies(file);
         assembly = assemblies.get(0);
@@ -123,6 +125,9 @@ public class Main extends SimpleApplication {
 
             @Override
             public void onAction(String name, boolean isPressed, float tpf) {
+                if (!isPressed) {
+                    running = !running;
+                }
             }
         }, PAUSE_MAPPING_NAME);
 
@@ -158,7 +163,9 @@ public class Main extends SimpleApplication {
 
     @Override
     public void simpleUpdate(float tpf) {
-        time += tpf;
-        movePieces();
+        if (running) {
+            time += tpf;
+            movePieces();
+        }
     }
 }
