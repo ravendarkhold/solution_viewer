@@ -22,8 +22,10 @@ import java.util.stream.Collectors;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.ZipException;
 
+import static java.lang.Character.isDigit;
+
 public class Importer {
-    private static int[][] rotationMatrices = {
+    private static final int[][] rotationMatrices = {
             {1, 0, 0, 0, 1, 0, 0, 0, 1},
             {1, 0, 0, 0, 0, -1, 0, 1, 0},
             {1, 0, 0, 0, -1, 0, 0, 0, -1},
@@ -52,7 +54,7 @@ public class Importer {
 
     public Document read(File puzzleFile) {
         DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
-        DocumentBuilder dBuilder = null;
+        DocumentBuilder dBuilder;
         try {
             dBuilder = dbFactory.newDocumentBuilder();
         } catch (ParserConfigurationException e) {
@@ -107,14 +109,23 @@ public class Importer {
                 int maxX = Integer.parseInt(item.getAttributes().getNamedItem("x").getNodeValue());
                 int maxY = Integer.parseInt(item.getAttributes().getNamedItem("y").getNodeValue());
                 int maxZ = Integer.parseInt(item.getAttributes().getNamedItem("z").getNodeValue());
+
                 int[][][] shape = new int[maxX][maxY][maxZ];
+
                 String text = item.getTextContent();
-                for (int x = 0; x < maxX; x++) {
-                    for (int y = 0; y < maxY; y++) {
-                        for (int z = 0; z < maxZ; z++) {
-                            char piece = text.charAt(z * maxY * maxX + y * maxX + x);
-                            shape[x][y][z] = (piece == '#' || Character.isDigit(piece)) ? 1 : 0;
-                        }
+
+                int skipped = 0;
+                for (int j = 0; j < text.length(); j++) {
+                    char piece = text.charAt(j);
+                    if (isDigit(piece)) {
+                        skipped++;
+                    } else {
+                        int pos = j - skipped;
+                        int x = pos % maxY % maxX;
+                        int y = (pos / maxX) % maxY;
+                        int z = pos / maxY / maxX;
+
+                        shape[x][y][z] = (piece == '#' || piece == '+') ? 1 : 0;
                     }
                 }
                 shapes.add(shape);
@@ -184,27 +195,27 @@ public class Importer {
                     transform.setRotation(rotations.get(i));
                     piecePosition.add(transform);
                 }
-                result.add(new Assembly(voxelsByPiece, piecePosition));
+                int assemblyNumber = getIntegerAttribute(solution, "asmNum");
+                int solutionNumber = getIntegerAttribute(solution, "solNum");
+
+                result.add(new Assembly(assemblyNumber, solutionNumber, voxelsByPiece, piecePosition, loadMoves(solution, piecePosition)));
             }
         }
         return result;
     }
 
-    public List<List<Transform>> loadMoves(File file, List<Transform> initial) {
-        Document doc = read(file);
+    private int getIntegerAttribute(Node solution, String name) {
+        Node node = solution.getAttributes().getNamedItem(name);
+        return (node != null) ? Integer.parseInt(node.getNodeValue()) + 1 : 1;
+    }
+
+    private List<List<Transform>> loadMoves(Node solution, List<Transform> initial) {
         List<List<Transform>> moves = new ArrayList<>();
-        org.w3c.dom.Node solutions = getChild(doc, "puzzle", "problems", "problem", "solutions");
-        if (solutions == null) {
-            throw new IllegalArgumentException("File contains no solutions.");
-        }
-        for (int nodeIndex = 0; nodeIndex < solutions.getChildNodes().getLength(); nodeIndex++) {
-            Node solution = solutions.getChildNodes().item(nodeIndex);
-            if (solution.getNodeType() == 1) {
-                for (int separationIndex = 0; separationIndex < solution.getChildNodes().getLength(); separationIndex++) {
-                    Node separation = solution.getChildNodes().item(separationIndex);
-                    if (separation.getNodeName().equals("separation")) {
-                        moves.addAll(parseSeparation(separation, initial));
-                    }
+        if (solution.getNodeType() == 1) {
+            for (int separationIndex = 0; separationIndex < solution.getChildNodes().getLength(); separationIndex++) {
+                Node separation = solution.getChildNodes().item(separationIndex);
+                if (separation.getNodeName().equals("separation")) {
+                    moves.addAll(parseSeparation(separation, initial));
                 }
             }
         }

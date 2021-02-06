@@ -7,11 +7,14 @@ import com.jme3.input.controls.ActionListener;
 import com.jme3.input.controls.KeyTrigger;
 import com.jme3.light.DirectionalLight;
 import com.jme3.material.Material;
+import com.jme3.material.RenderState;
 import com.jme3.math.ColorRGBA;
 import com.jme3.math.Transform;
 import com.jme3.math.Vector3f;
 import com.jme3.scene.Geometry;
+import com.jme3.scene.Mesh;
 import com.jme3.scene.Node;
+import com.jme3.scene.debug.Arrow;
 import com.jme3.scene.shape.Box;
 import com.jme3.system.AppSettings;
 import se.peter.solution_viewer.importer.Importer;
@@ -27,7 +30,7 @@ import static java.lang.Math.floor;
 public class Main extends SimpleApplication {
 
     private static final String PAUSE_MAPPING_NAME = "asdfas";
-    public static final float SPEED = 1f;
+    public static final float SPEED = 5f;
     private List<List<Transform>> moves;
     private float time = 0;
     private Assembly assembly;
@@ -64,9 +67,11 @@ public class Main extends SimpleApplication {
         File file = new File("Y:\\Peter\\puzzles\\Others\\Stephen Baumeggar\\excaliburr.xmpuzzle");
 
         List<Assembly> assemblies = importer.loadAssemblies(file);
-        assembly = assemblies.get(0);
+        assembly = assemblies.get(assemblies.size() - 1);
+        System.out.println("Assembly " + assembly.getAssemblyNumber() + ", solution " + assembly.getSolutionNumber());
+
         int pieceCount = assembly.getVoxelsByPiece().size();
-        moves = importer.loadMoves(file, assembly.getPositionState());
+        moves = assembly.getMoves();
 
 //        moves.forEach(m -> {
 //            System.out.println("--------");
@@ -135,6 +140,8 @@ public class Main extends SimpleApplication {
         ChaseCamera chaseCam = new ChaseCamera(cam, rootNode, inputManager);
         chaseCam.setDefaultDistance(50f);
         chaseCam.setDragToRotate(true);
+
+        attachCoordinateAxes(rootNode);
     }
 
     private void movePieces() {
@@ -167,5 +174,27 @@ public class Main extends SimpleApplication {
             time += tpf;
             movePieces();
         }
+    }
+
+    private void putShape(Node n, Mesh shape, ColorRGBA color) {
+        Geometry g = new Geometry("coordinate axis", shape);
+        Material mat = new Material(getAssetManager(), "Common/MatDefs/Misc/Unshaded.j3md");
+        RenderState additionalRenderState = mat.getAdditionalRenderState();
+        additionalRenderState.setWireframe(true);
+        additionalRenderState.setLineWidth(4);
+        mat.setColor("Color", color);
+        g.setMaterial(mat);
+        n.attachChild(g);
+    }
+
+    private void attachCoordinateAxes(Node n) {
+        Arrow arrow = new Arrow(Vector3f.UNIT_X);
+        putShape(n, arrow, ColorRGBA.Red);
+
+        arrow = new Arrow(Vector3f.UNIT_Y);
+        putShape(n, arrow, ColorRGBA.Green);
+
+        arrow = new Arrow(Vector3f.UNIT_Z);
+        putShape(n, arrow, ColorRGBA.Blue);
     }
 }
