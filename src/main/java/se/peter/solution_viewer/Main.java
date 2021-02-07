@@ -89,10 +89,8 @@ public class Main extends SimpleApplication {
             pieceNodes.add(pieceNode);
             Material mat = new Material(assetManager, "Common/MatDefs/Light/Lighting.j3md");
 
-            mat.setTexture("DiffuseMap",
-                    assetManager.loadTexture("Textures/Terrain/Pond/Pond.jpg"));
-            mat.setTexture("NormalMap",
-                    assetManager.loadTexture("Textures/Terrain/Pond/Pond_normal.png"));
+            mat.setTexture("DiffuseMap", assetManager.loadTexture("Pond.jpg"));
+            mat.setTexture("NormalMap", assetManager.loadTexture("Pond_normal.png"));
             mat.setBoolean("UseMaterialColors", true);
             mat.setColor("Diffuse", colors[pieceNumber - 1]);
             mat.setColor("Specular", ColorRGBA.White);
