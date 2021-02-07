@@ -9,7 +9,6 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 import se.peter.solution_viewer.puzzle.Assembly;
-import se.peter.solution_viewer.puzzle.Position;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -154,69 +153,84 @@ public class Importer {
             Node solution = solutions.getChildNodes().item(nodeIndex);
             if (solution.getNodeType() == 1) {
                 org.w3c.dom.Node assembly = getChild(solution, "assembly");
-                StringTokenizer tokenizer = new StringTokenizer(assembly.getTextContent(), " ");
-                int shape = 0;
 
-                List<Quaternion> rotations = new ArrayList<>();
-                List<int[][][]> shapesInAssembly = new ArrayList<>();
-                List<Position> shapeOffsetsInAssembly = new ArrayList<>();
-                while (tokenizer.hasMoreTokens()) {
-                    String token = tokenizer.nextToken();
-                    if (!token.equals("x")) {
-                        int x = Integer.parseInt(token);
-                        int y = Integer.parseInt(tokenizer.nextToken());
-                        int z = Integer.parseInt(tokenizer.nextToken());
-                        int originalRotation = Integer.parseInt(tokenizer.nextToken());
+                List<int[][][]> voxelsByPiece = getVoxelsByPiece(shapes, shapesInProblem, assembly);
 
-                        int[][][] shape1 = shapes.get(shapesInProblem.get(shape));
-                        int[] rotationMatrix = rotationMatrices[originalRotation];
-                        rotations.add(new Quaternion().fromRotationMatrix(
-                                rotationMatrix[0], rotationMatrix[1], rotationMatrix[2],
-                                rotationMatrix[3], rotationMatrix[4], rotationMatrix[5],
-                                rotationMatrix[6], rotationMatrix[7], rotationMatrix[8]
-                        ));
-                        shapesInAssembly.add(shape1);
-                        shapeOffsetsInAssembly.add(new Position(x, y, z));
-                    } else {
-                        rotations.add(null);
-                        shapesInAssembly.add(null);
-                        shapeOffsetsInAssembly.add(null);
-                    }
-                    shape++;
-                }
+                List<Transform> piecePosition = getPiecePositions(assembly);
+                List<Transform> positionState = piecePosition.stream().filter(Objects::nonNull).collect(Collectors.toList());
 
-                int sizeX = 0;
-                int sizeY = 0;
-                int sizeZ = 0;
-                for (int[][][] s : shapesInAssembly) {
-                    if (s != null) {
-                        sizeX = Integer.max(sizeX, s.length);
-                        sizeY = Integer.max(sizeY, s[0].length);
-                        sizeZ = Integer.max(sizeZ, s[0][0].length);
-                    }
-                }
-                List<int[][][]> voxelsByPiece = new ArrayList<>();
-                List<Transform> piecePosition = new ArrayList<>();
-                for (int i = 0; i < shapesInAssembly.size(); i++) {
-                    int[][][] s = shapesInAssembly.get(i);
-                    if (s != null) {
-                        voxelsByPiece.add(s);
-                        Position offset = shapeOffsetsInAssembly.get(i);
-                        Transform transform = new Transform(new Vector3f(offset.getX(), offset.getY(), offset.getZ()));
-                        transform.setRotation(rotations.get(i));
-                        piecePosition.add(transform);
-                    } else {
-                        piecePosition.add(null);
-                    }
-                }
                 int assemblyNumber = getIntegerAttribute(solution, "asmNum");
                 int solutionNumber = getIntegerAttribute(solution, "solNum");
 
-                List<Transform> positionState = piecePosition.stream().filter(Objects::nonNull).collect(Collectors.toList());
                 result.add(new Assembly(assemblyNumber, solutionNumber, voxelsByPiece, positionState, loadMoves(solution, piecePosition)));
             }
         }
+        if (result.stream().allMatch(a -> a.getMoves().isEmpty())) {
+            Assembly assembly = loadAssemblyGeneratedByAndrew(result, solutions);
+            result.add(assembly);
+        }
         return result;
+    }
+
+    private Assembly loadAssemblyGeneratedByAndrew(List<Assembly> result, Node solutions) {
+        List<int[][][]> voxelsByPiece = result.get(0).getVoxelsByPiece();
+
+        result.clear();
+        List<List<Transform>> positions = new ArrayList<>();
+        for (int nodeIndex = 0; nodeIndex < solutions.getChildNodes().getLength(); nodeIndex++) {
+            Node solution = solutions.getChildNodes().item(nodeIndex);
+            if (solution.getNodeType() == 1) {
+                Node assembly = getChild(solution, "assembly");
+                positions.add(getPiecePositions(assembly).stream().map(t -> t != null ? t : new Transform(new Vector3f(100, 100, 100))).collect(Collectors.toList()));
+            }
+        }
+        Assembly assembly = new Assembly(1, 1, voxelsByPiece, positions.get(0), positions);
+        return assembly;
+    }
+
+    private List<int[][][]> getVoxelsByPiece(List<int[][][]> shapes, List<Integer> shapesInProblem, Node assembly) {
+        List<int[][][]> voxelsByPiece = new ArrayList<>();
+        StringTokenizer tokenizer = new StringTokenizer(assembly.getTextContent(), " ");
+        int shape = 0;
+        while (tokenizer.hasMoreTokens()) {
+            String token = tokenizer.nextToken();
+            if (!token.equals("x")) {
+                tokenizer.nextToken();
+                tokenizer.nextToken();
+                tokenizer.nextToken();
+
+                voxelsByPiece.add(shapes.get(shapesInProblem.get(shape)));
+            }
+            shape++;
+        }
+        return voxelsByPiece;
+    }
+
+    private List<Transform> getPiecePositions(Node assembly) {
+        StringTokenizer tokenizer = new StringTokenizer(assembly.getTextContent(), " ");
+        List<Transform> piecePosition = new ArrayList<>();
+        while (tokenizer.hasMoreTokens()) {
+            String token = tokenizer.nextToken();
+            if (!token.equals("x")) {
+                int x = Integer.parseInt(token);
+                int y = Integer.parseInt(tokenizer.nextToken());
+                int z = Integer.parseInt(tokenizer.nextToken());
+                int rotation = Integer.parseInt(tokenizer.nextToken());
+                int[] rotationMatrix = rotationMatrices[rotation];
+                Quaternion q = new Quaternion().fromRotationMatrix(
+                        rotationMatrix[0], rotationMatrix[1], rotationMatrix[2],
+                        rotationMatrix[3], rotationMatrix[4], rotationMatrix[5],
+                        rotationMatrix[6], rotationMatrix[7], rotationMatrix[8]
+                );
+
+                Transform transform = new Transform(new Vector3f(x, y, z));
+                transform.setRotation(q);
+                piecePosition.add(transform);
+            } else {
+                piecePosition.add(null);
+            }
+        }
+        return piecePosition;
     }
 
     private int getIntegerAttribute(Node solution, String name) {

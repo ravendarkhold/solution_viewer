@@ -9,6 +9,7 @@ import com.jme3.light.DirectionalLight;
 import com.jme3.material.Material;
 import com.jme3.material.RenderState;
 import com.jme3.math.ColorRGBA;
+import com.jme3.math.Quaternion;
 import com.jme3.math.Transform;
 import com.jme3.math.Vector3f;
 import com.jme3.scene.Geometry;
@@ -30,7 +31,7 @@ import static java.lang.Math.floor;
 public class Main extends SimpleApplication {
 
     private static final String PAUSE_MAPPING_NAME = "asdfas";
-    public static final float SPEED = 0.5f;
+    public static final float SPEED = 2.5f;
     private List<List<Transform>> moves;
     private float time = 0;
     private Assembly assembly;
@@ -58,16 +59,16 @@ public class Main extends SimpleApplication {
 
     @Override
     public void simpleInitApp() {
-
         Importer importer = new Importer();
-        File file = new File("Y:\\Peter\\puzzles\\Own\\There and back again (Level 12 and 21 moves)\\test\\test");
+        //File file = new File("Y:\\Peter\\puzzles\\Own\\There and back again (Level 12 and 21 moves)\\test\\test");
         //File file = new File("Y:\\Peter\\puzzles\\Others\\Alfons Eyckmans\\Cuckold.xmpuzzle");
         //File file = new File("Y:\\Peter\\puzzles\\Others\\Juno\\Keep_I_on_the_Burr_SolutionFile.xmpuzzle");
-        //   File file = new File("Y:\\Peter\\puzzles\\Others\\Don Closterman\\C-6-216-14-17.xmpuzzle");
+        File file = new File("Y:\\Peter\\puzzles\\Others\\Andrew Crowell\\X_TIC_SolutionFile.xmpuzzle");
         // File file = new File("Y:\\Peter\\puzzles\\Others\\Stephen Baumeggar\\excaliburr.xmpuzzle");
 
         List<Assembly> assemblies = importer.loadAssemblies(file);
-        assembly = assemblies.get(0); //assemblies.size() - 1);
+
+        assembly = assemblies.get(assemblies.size() - 1);
         System.out.println("Assembly " + assembly.getAssemblyNumber() + ", solution " + assembly.getSolutionNumber());
 
         int pieceCount = assembly.getVoxelsByPiece().size();
@@ -144,6 +145,8 @@ public class Main extends SimpleApplication {
         attachCoordinateAxes(rootNode);
     }
 
+    int lastMoveIndex = 0;
+
     private void movePieces() {
         int moveIndex = (int) floor(time * SPEED);
         if (moveIndex < moves.size()) {
@@ -159,10 +162,26 @@ public class Main extends SimpleApplication {
 
                 Node node = pieceNodes.get(piece);
 
-                Transform t = new Transform();
-                t.interpolateTransforms(t0, t1, fraction);
-                node.setLocalTransform(t);
+                Quaternion q = new Quaternion();
+                q.slerp(t0.getRotation(), t1.getRotation(), fraction);
+
+                Vector3f t = new Vector3f();
+                t.interpolateLocal(t0.getTranslation(), t1.getTranslation(), fraction);
+                node.setLocalRotation(q);
+                node.setLocalTranslation(t);
+
+//                if (piece == 1) {
+//                    System.out.println("Piece " + (piece + 1));
+//                    System.out.println(t0.getTranslation());
+//                    System.out.println(t0.getRotation());
+//                    System.out.println(t1.getTranslation());
+//                    System.out.println(t1.getRotation());
+//                    System.out.println(t);
+//                    System.out.println(q);
+//
+//                }
             }
+            lastMoveIndex = moveIndex;
         } else {
             time = 0;
         }
