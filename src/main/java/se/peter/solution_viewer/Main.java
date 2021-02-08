@@ -29,42 +29,54 @@ import java.util.stream.IntStream;
 import static java.lang.Math.floor;
 
 public class Main extends SimpleApplication {
-
-    private static final String PAUSE_MAPPING_NAME = "asdfas";
+    private static final String PAUSE_MAPPING_NAME = "PAUSE";
     public static final float SPEED = 2.5f;
+
+    private final File file;
     private List<List<Transform>> moves;
     private float time = 0;
     private Assembly assembly;
     private List<Node> pieceNodes;
     private boolean running = false;
 
-    public static void main(String[] args) {
+    public Main(File file) {
+        this.file = file;
+    }
 
-        Main app = new Main();
+    public static void main(String[] args) {
+        if (args.length != 1) {
+            System.err.println("Usage: java -jar target\\solution-viewer-1.0-SNAPSHOT-jar-with-dependencies.jar <xmpuzzle file>");
+            return;
+        }
+        File file = new File(args[0]);
+        if (!file.exists() || !file.canRead()) {
+            System.err.println("Cannot read file " + file.getAbsolutePath());
+            return;
+        }
+
+        // file = new File("Y:\\Peter\\puzzles\\Own\\There and back again (Level 12 and 21 moves)\\test\\test");
+        // file = new File("Y:\\Peter\\puzzles\\Others\\Alfons Eyckmans\\Cuckold.xmpuzzle");
+        // file = new File("Y:\\Peter\\puzzles\\Others\\Juno\\Keep_I_on_the_Burr_SolutionFile.xmpuzzle");
+        // file = new File("Y:\\Peter\\puzzles\\Others\\Andrew Crowell\\X_TIC_SolutionFile.xmpuzzle");
+        // file = new File("Y:\\Peter\\puzzles\\Others\\Stephen Baumeggar\\excaliburr.xmpuzzle");
+
+        Main app = new Main(file);
         app.setShowSettings(false);
 
         AppSettings settings = new AppSettings(true);
         settings.put("Width", 2000);
         settings.put("Height", 1500);
         settings.put("VSync", true);
-
-
         settings.put("Samples", 4);
         settings.setTitle("Solution viewer");
         app.setSettings(settings);
 
         app.start();
-
     }
 
     @Override
     public void simpleInitApp() {
         Importer importer = new Importer();
-        //File file = new File("Y:\\Peter\\puzzles\\Own\\There and back again (Level 12 and 21 moves)\\test\\test");
-        //File file = new File("Y:\\Peter\\puzzles\\Others\\Alfons Eyckmans\\Cuckold.xmpuzzle");
-        //File file = new File("Y:\\Peter\\puzzles\\Others\\Juno\\Keep_I_on_the_Burr_SolutionFile.xmpuzzle");
-        File file = new File("Y:\\Peter\\puzzles\\Others\\Andrew Crowell\\X_TIC_SolutionFile.xmpuzzle");
-        // File file = new File("Y:\\Peter\\puzzles\\Others\\Stephen Baumeggar\\excaliburr.xmpuzzle");
 
         List<Assembly> assemblies = importer.loadAssemblies(file);
 
