@@ -118,7 +118,7 @@ public class Importer {
                         skipped++;
                     } else {
                         int pos = j - skipped;
-                        int x = pos % maxY % maxX;
+                        int x = pos % maxX;
                         int y = (pos / maxX) % maxY;
                         int z = pos / maxY / maxX;
 

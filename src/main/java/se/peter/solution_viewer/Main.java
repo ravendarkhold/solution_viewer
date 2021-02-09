@@ -24,26 +24,35 @@ import se.peter.solution_viewer.puzzle.Assembly;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.stream.IntStream;
 
 import static java.lang.Math.floor;
 
 public class Main extends SimpleApplication {
     private static final String PAUSE_MAPPING_NAME = "PAUSE";
-    public static final float SPEED = 2.5f;
+    private static final String FORWARD_MAPPING_NAME = "FORWARD";
+    private static final String REVERSE_MAPPING_NAME = "REVERSE";
+    public static final float SPEED = 1f;
 
     private final File file;
     private List<List<Transform>> moves;
     private float time = 0;
+    private int direction = 1;
+    private int currentMoveIndex;
     private Assembly assembly;
     private List<Node> pieceNodes;
     private boolean running = false;
+    private int pauseAt;
 
     public Main(File file) {
         this.file = file;
     }
 
     public static void main(String[] args) {
+        Logger.getLogger("").setLevel(Level.OFF);
+
         if (args.length != 1) {
             System.err.println("Usage: java -jar target\\solution-viewer-1.0-SNAPSHOT-jar-with-dependencies.jar <xmpuzzle file>");
             return;
@@ -136,16 +145,7 @@ public class Main extends SimpleApplication {
         sun2.setColor(ColorRGBA.White);
         rootNode.addLight(sun2);
 
-        inputManager.addMapping(PAUSE_MAPPING_NAME, new KeyTrigger(KeyInput.KEY_SPACE));
-        inputManager.addListener(new ActionListener() {
-
-            @Override
-            public void onAction(String name, boolean isPressed, float tpf) {
-                if (!isPressed) {
-                    running = !running;
-                }
-            }
-        }, PAUSE_MAPPING_NAME);
+        setupControls();
 
         flyCam.setEnabled(false);
         ChaseCamera chaseCam = new ChaseCamera(cam, rootNode, inputManager);
@@ -153,14 +153,60 @@ public class Main extends SimpleApplication {
         chaseCam.setDragToRotate(true);
 
         attachCoordinateAxes(rootNode);
+
+        pauseAt = moves.size() - 1;
     }
 
-    int lastMoveIndex = 0;
+    private void setupControls() {
+        inputManager.addMapping(PAUSE_MAPPING_NAME, new KeyTrigger(KeyInput.KEY_SPACE));
+        inputManager.addListener(new ActionListener() {
 
-    private void movePieces() {
-        int moveIndex = (int) floor(time * SPEED);
+            @Override
+            public void onAction(String name, boolean isPressed, float tpf) {
+                if (!isPressed) {
+                    running = !running;
+                    pauseAt = direction > 0 ? moves.size() : -1;
+                }
+            }
+        }, PAUSE_MAPPING_NAME);
+        inputManager.addMapping(FORWARD_MAPPING_NAME, new KeyTrigger(KeyInput.KEY_RIGHT));
+        inputManager.addListener(new ActionListener() {
+
+            @Override
+            public void onAction(String name, boolean isPressed, float tpf) {
+                if (!isPressed) {
+                    running = true;
+                    direction = 1;
+                    if (currentMoveIndex < moves.size() - 1) {
+                        pauseAt = currentMoveIndex + 1;
+                    } else {
+                        time = 0;
+                        pauseAt = 1;
+                    }
+                }
+            }
+        }, FORWARD_MAPPING_NAME);
+        inputManager.addMapping(REVERSE_MAPPING_NAME, new KeyTrigger(KeyInput.KEY_LEFT));
+        inputManager.addListener(new ActionListener() {
+
+            @Override
+            public void onAction(String name, boolean isPressed, float tpf) {
+                if (!isPressed) {
+                    running = true;
+                    direction = -1;
+                    if (currentMoveIndex > 0) {
+                        pauseAt = currentMoveIndex - 1;
+                    } else {
+                        time = (moves.size() - 1) / SPEED;
+                        pauseAt = moves.size() - 2;
+                    }
+                }
+            }
+        }, REVERSE_MAPPING_NAME);
+    }
+
+    private void movePieces(int moveIndex, float fraction) {
         if (moveIndex < moves.size()) {
-            float fraction = (time * SPEED - moveIndex);
             for (int piece = 0; piece < assembly.getVoxelsByPiece().size(); piece++) {
                 Transform t0;
                 if (moveIndex > 0) {
@@ -191,18 +237,22 @@ public class Main extends SimpleApplication {
 //
 //                }
             }
-            lastMoveIndex = moveIndex;
-        } else {
-            time = 0;
         }
     }
 
     @Override
     public void simpleUpdate(float tpf) {
         if (running) {
-            time += tpf;
-            movePieces();
+            time += tpf * direction;
+            int moveIndex = (int) floor(time * SPEED);
+            if (moveIndex == pauseAt) {
+                running = false;
+            } else {
+                movePieces(moveIndex, (time * SPEED - moveIndex));
+            }
+            currentMoveIndex = moveIndex;
         }
+
     }
 
     private void putShape(Node n, Mesh shape, ColorRGBA color) {
