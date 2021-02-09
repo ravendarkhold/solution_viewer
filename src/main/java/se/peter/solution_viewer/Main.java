@@ -1,6 +1,7 @@
 package se.peter.solution_viewer;
 
 import com.jme3.app.SimpleApplication;
+import com.jme3.font.BitmapText;
 import com.jme3.input.ChaseCamera;
 import com.jme3.input.KeyInput;
 import com.jme3.input.controls.ActionListener;
@@ -31,11 +32,7 @@ import java.util.stream.IntStream;
 import static java.lang.Math.floor;
 
 public class Main extends SimpleApplication {
-    private static final String PAUSE_MAPPING_NAME = "PAUSE";
-    private static final String FORWARD_MAPPING_NAME = "FORWARD";
-    private static final String REVERSE_MAPPING_NAME = "REVERSE";
-    public static final float SPEED = 1f;
-
+    public float moveSpeed = 1f;
     private final File file;
     private List<List<Transform>> moves;
     private float time = 0;
@@ -45,6 +42,7 @@ public class Main extends SimpleApplication {
     private List<Node> pieceNodes;
     private boolean running = false;
     private int pauseAt;
+    private BitmapText moveText;
 
     public Main(File file) {
         this.file = file;
@@ -135,6 +133,28 @@ public class Main extends SimpleApplication {
         }
         viewPort.setBackgroundColor(ColorRGBA.White);
 
+        addLights();
+
+        setupControls();
+
+        setupCamera();
+
+        attachCoordinateAxes(rootNode);
+
+        pauseAt = moves.size() - 1;
+
+        guiFont = assetManager.loadFont("Interface/Fonts/Default.fnt");
+        moveText = new BitmapText(guiFont, false);
+        moveText.setSize(guiFont.getCharSet().getRenderedSize());
+        moveText.setText("");
+        moveText.setLocalTranslation(500, moveText.getLineHeight(), 0);
+        moveText.setColor(ColorRGBA.Black);
+        guiNode.attachChild(moveText);
+
+        rootNode.attachChild(guiNode);
+    }
+
+    private void addLights() {
         DirectionalLight sun = new DirectionalLight();
         sun.setDirection(new Vector3f(1, 1, 1).normalizeLocal());
         sun.setColor(ColorRGBA.White);
@@ -144,65 +164,69 @@ public class Main extends SimpleApplication {
         sun2.setDirection(new Vector3f(-1, -1, -1).normalizeLocal());
         sun2.setColor(ColorRGBA.White);
         rootNode.addLight(sun2);
+    }
 
-        setupControls();
-
+    private void setupCamera() {
+        Node n = new Node();
+        n.setLocalTranslation(5, 5, 5); // Should be middle of puzzle
+        rootNode.attachChild(n);
         flyCam.setEnabled(false);
-        ChaseCamera chaseCam = new ChaseCamera(cam, rootNode, inputManager);
+        ChaseCamera chaseCam = new ChaseCamera(cam, n, inputManager);
         chaseCam.setDefaultDistance(50f);
+        chaseCam.setMaxDistance(1000f);
         chaseCam.setDragToRotate(true);
-
-        attachCoordinateAxes(rootNode);
-
-        pauseAt = moves.size() - 1;
+        chaseCam.setMinVerticalRotation((float) (-0.5 * Math.PI));
     }
 
     private void setupControls() {
-        inputManager.addMapping(PAUSE_MAPPING_NAME, new KeyTrigger(KeyInput.KEY_SPACE));
-        inputManager.addListener(new ActionListener() {
+        addKeyAction(KeyInput.KEY_SPACE, (name, isPressed, tpf) -> {
+            if (!isPressed) {
+                running = !running;
+                pauseAt = direction > 0 ? moves.size() : -1;
+            }
+        });
 
-            @Override
-            public void onAction(String name, boolean isPressed, float tpf) {
-                if (!isPressed) {
-                    running = !running;
-                    pauseAt = direction > 0 ? moves.size() : -1;
+        addKeyAction(KeyInput.KEY_RIGHT, (name, isPressed, tpf) -> {
+            if (!isPressed) {
+                running = true;
+                direction = 1;
+                if (currentMoveIndex < moves.size() - 1) {
+                    pauseAt = currentMoveIndex + 1;
+                } else {
+                    time = 0;
+                    pauseAt = 1;
                 }
             }
-        }, PAUSE_MAPPING_NAME);
-        inputManager.addMapping(FORWARD_MAPPING_NAME, new KeyTrigger(KeyInput.KEY_RIGHT));
-        inputManager.addListener(new ActionListener() {
-
-            @Override
-            public void onAction(String name, boolean isPressed, float tpf) {
-                if (!isPressed) {
-                    running = true;
-                    direction = 1;
-                    if (currentMoveIndex < moves.size() - 1) {
-                        pauseAt = currentMoveIndex + 1;
-                    } else {
-                        time = 0;
-                        pauseAt = 1;
-                    }
+        });
+        addKeyAction(KeyInput.KEY_LEFT, (name, isPressed, tpf) -> {
+            if (!isPressed) {
+                running = true;
+                direction = -1;
+                if (currentMoveIndex > 0) {
+                    pauseAt = currentMoveIndex - 1;
+                } else {
+                    time = (moves.size() - 1) / speed;
+                    pauseAt = moves.size() - 2;
                 }
             }
-        }, FORWARD_MAPPING_NAME);
-        inputManager.addMapping(REVERSE_MAPPING_NAME, new KeyTrigger(KeyInput.KEY_LEFT));
-        inputManager.addListener(new ActionListener() {
+        });
 
-            @Override
-            public void onAction(String name, boolean isPressed, float tpf) {
-                if (!isPressed) {
-                    running = true;
-                    direction = -1;
-                    if (currentMoveIndex > 0) {
-                        pauseAt = currentMoveIndex - 1;
-                    } else {
-                        time = (moves.size() - 1) / SPEED;
-                        pauseAt = moves.size() - 2;
-                    }
-                }
+        addKeyAction(KeyInput.KEY_UP, (name, isPressed, tpf) -> {
+            if (!isPressed) {
+                moveSpeed *= 1.5;
             }
-        }, REVERSE_MAPPING_NAME);
+        });
+        addKeyAction(KeyInput.KEY_LEFT, (name, isPressed, tpf) -> {
+            if (!isPressed) {
+                moveSpeed /= 1.5;
+            }
+        });
+    }
+
+    private void addKeyAction(int key, ActionListener action) {
+        String mapping = "KEY_MAPPING_" + key;
+        inputManager.addMapping(mapping, new KeyTrigger(key));
+        inputManager.addListener(action, mapping);
     }
 
     private void movePieces(int moveIndex, float fraction) {
@@ -225,17 +249,6 @@ public class Main extends SimpleApplication {
                 t.interpolateLocal(t0.getTranslation(), t1.getTranslation(), fraction);
                 node.setLocalRotation(q);
                 node.setLocalTranslation(t);
-
-//                if (piece == 1) {
-//                    System.out.println("Piece " + (piece + 1));
-//                    System.out.println(t0.getTranslation());
-//                    System.out.println(t0.getRotation());
-//                    System.out.println(t1.getTranslation());
-//                    System.out.println(t1.getRotation());
-//                    System.out.println(t);
-//                    System.out.println(q);
-//
-//                }
             }
         }
     }
@@ -244,13 +257,14 @@ public class Main extends SimpleApplication {
     public void simpleUpdate(float tpf) {
         if (running) {
             time += tpf * direction;
-            int moveIndex = (int) floor(time * SPEED);
+            int moveIndex = (int) floor(time * moveSpeed);
             if (moveIndex == pauseAt) {
                 running = false;
             } else {
-                movePieces(moveIndex, (time * SPEED - moveIndex));
+                movePieces(moveIndex, (time * moveSpeed - moveIndex));
             }
             currentMoveIndex = moveIndex;
+            moveText.setText("Move: " + currentMoveIndex);
         }
 
     }
