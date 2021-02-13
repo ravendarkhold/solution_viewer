@@ -22,6 +22,7 @@ import com.jme3.system.AppSettings;
 import se.peter.solution_viewer.importer.Importer;
 import se.peter.solution_viewer.puzzle.Assembly;
 
+import java.awt.*;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,7 +34,9 @@ import static java.lang.Math.floor;
 import static java.lang.Math.round;
 
 public class Main extends SimpleApplication {
-    public float moveSpeed = 1f;
+    private static final boolean DUMP_MOVES = false;
+
+    private float moveSpeed = 1f;
     private final File file;
     private List<List<Transform>> moves;
     private Assembly assembly;
@@ -62,18 +65,17 @@ public class Main extends SimpleApplication {
             return;
         }
 
-        // file = new File("Y:\\Peter\\puzzles\\Own\\There and back again (Level 12 and 21 moves)\\test\\test");
-        // file = new File("Y:\\Peter\\puzzles\\Others\\Alfons Eyckmans\\Cuckold.xmpuzzle");
-        // file = new File("Y:\\Peter\\puzzles\\Others\\Juno\\Keep_I_on_the_Burr_SolutionFile.xmpuzzle");
-        // file = new File("Y:\\Peter\\puzzles\\Others\\Andrew Crowell\\X_TIC_SolutionFile.xmpuzzle");
-        // file = new File("Y:\\Peter\\puzzles\\Others\\Stephen Baumeggar\\excaliburr.xmpuzzle");
-
         Main app = new Main(file);
         app.setShowSettings(false);
 
+        GraphicsDevice gd = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
+        int width = gd.getDisplayMode().getWidth();
+        int height = gd.getDisplayMode().getHeight();
+
         AppSettings settings = new AppSettings(true);
-        settings.put("Width", 2000);
-        settings.put("Height", 1500);
+        settings.put("Width", width / 2);
+        settings.put("Height", height / 2);
+        settings.setResizable(true);
         settings.put("VSync", true);
         settings.put("Samples", 4);
         settings.setTitle("Solution viewer");
@@ -91,59 +93,41 @@ public class Main extends SimpleApplication {
         assembly = assemblies.get(assemblies.size() - 1);
         System.out.println("Assembly " + assembly.getAssemblyNumber() + ", solution " + assembly.getSolutionNumber());
 
-        int pieceCount = assembly.getVoxelsByPiece().size();
+        List<int[][][]> voxelsByPiece = assembly.getVoxelsByPiece();
+        int pieceCount = voxelsByPiece.size();
         moves = assembly.getPiecePositionsByMove();
 
-//        moves.forEach(m -> {
-//            System.out.println("--------");
-//            for (int i = 0; i < assembly.getVoxelsByPiece().size(); i++) {
-//                Transform transform = m.get(i);
-//                System.out.println("Piece " + i + " " + transform.getTranslation() + " " + transform.getRotation());
-//            }
-//        });
+        if (DUMP_MOVES) {
+            moves.forEach(m -> {
+                System.out.println("--------");
+                for (int i = 0; i < voxelsByPiece.size(); i++) {
+                    Transform transform = m.get(i);
+                    System.out.println("Piece " + i + " " + transform.getTranslation() + " " + transform.getRotation());
+                }
+            });
+        }
 
         pieceNodes = new ArrayList<>();
         ColorRGBA[] colors = IntStream.range(0, pieceCount).mapToObj(i -> ColorRGBA.randomColor()).toArray(ColorRGBA[]::new);
+        List<Transform> initialPositions = assembly.getPiecePositionsByMove().get(0);
 
         for (int pieceNumber = 1; pieceNumber <= pieceCount; pieceNumber++) {
-            int[][][] piece = assembly.getVoxelsByPiece().get(pieceNumber - 1);
-            Node pieceNode = new Node();
+            Node pieceNode = createPiece(voxelsByPiece.get(pieceNumber - 1), colors[pieceNumber - 1], initialPositions.get(pieceNumber - 1));
             pieceNodes.add(pieceNode);
-            Material mat = new Material(assetManager, "Common/MatDefs/Light/Lighting.j3md");
-
-            mat.setTexture("DiffuseMap", assetManager.loadTexture("Pond.jpg"));
-            mat.setTexture("NormalMap", assetManager.loadTexture("Pond_normal.png"));
-            mat.setBoolean("UseMaterialColors", true);
-            mat.setColor("Diffuse", colors[pieceNumber - 1]);
-            mat.setColor("Specular", ColorRGBA.White);
-            mat.setFloat("Shininess", 0f);  // [0,128]
-
-            //  mat.getAdditionalRenderState().setWireframe(true);
-            for (int x = 0; x < piece.length; x++)
-                for (int y = 0; y < piece[0].length; y++)
-                    for (int z = 0; z < piece[0][0].length; z++) {
-                        if (piece[x][y][z] == 1) {
-                            Box box = new Box(0.5f, 0.5f, 0.5f);
-                            Geometry geom = new Geometry("Box", box);
-                            geom.setLocalTranslation(x, y, z);
-                            geom.setMaterial(mat);
-                            pieceNode.attachChild(geom);
-                        }
-                    }
             rootNode.attachChild(pieceNode);
-
-            pieceNode.setLocalTransform(assembly.getPiecePositionsByMove().get(0).get(pieceNumber - 1));
         }
+
         viewPort.setBackgroundColor(ColorRGBA.White);
-
         addLights();
-
         setupControls();
-
         setupCamera();
 
         attachCoordinateAxes(rootNode);
 
+        createUI();
+    }
+
+    private void createUI() {
         guiFont = assetManager.loadFont("Interface/Fonts/Default.fnt");
         moveText = new BitmapText(guiFont, false);
         moveText.setSize(guiFont.getCharSet().getRenderedSize());
@@ -153,6 +137,36 @@ public class Main extends SimpleApplication {
         guiNode.attachChild(moveText);
 
         rootNode.attachChild(guiNode);
+    }
+
+    private Node createPiece(int[][][] piece, ColorRGBA color, Transform initialPosition) {
+        Node pieceNode = new Node();
+
+        Material mat = new Material(assetManager, "Common/MatDefs/Light/Lighting.j3md");
+        mat.setTexture("DiffuseMap", assetManager.loadTexture("Pond.jpg"));
+        mat.setTexture("NormalMap", assetManager.loadTexture("Pond_normal.png"));
+        mat.setBoolean("UseMaterialColors", true);
+        mat.setColor("Diffuse", color);
+        mat.setColor("Specular", ColorRGBA.White);
+        mat.setFloat("Shininess", 0f);  // [0,128]
+
+        //  mat.getAdditionalRenderState().setWireframe(true);
+        for (int x = 0; x < piece.length; x++)
+            for (int y = 0; y < piece[0].length; y++)
+                for (int z = 0; z < piece[0][0].length; z++) {
+                    if (piece[x][y][z] == 1) {
+                        Box box = new Box(0.5f, 0.5f, 0.5f);
+
+                        Geometry geom = new Geometry("Box", box);
+                        geom.setLocalTranslation(x, y, z);
+                        geom.setMaterial(mat);
+
+                        pieceNode.attachChild(geom);
+                    }
+                }
+
+        pieceNode.setLocalTransform(initialPosition);
+        return pieceNode;
     }
 
     private void addLights() {
@@ -282,8 +296,6 @@ public class Main extends SimpleApplication {
             if (moveIndex != currentMoveIndex) {
                 currentMoveIndex = moveIndex;
                 showMoveIndex();
-            } else {
-                currentMoveIndex = moveIndex;
             }
         }
     }
@@ -314,7 +326,7 @@ public class Main extends SimpleApplication {
         putShape(n, arrow, ColorRGBA.Blue);
     }
 
-    private static enum State {
-        PAUSED, RUNNING, STEPPING;
+    private enum State {
+        PAUSED, RUNNING, STEPPING
     }
 }

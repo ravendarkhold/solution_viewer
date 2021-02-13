@@ -22,7 +22,6 @@ public class Assembly {
             List<Transform> transforms = it.next();
             if (previous != null && previous.equals(transforms)) {
                 it.remove();
-                System.err.println("Removed " + transforms);
             }
             previous = transforms;
         }
@@ -31,10 +30,6 @@ public class Assembly {
     public List<int[][][]> getVoxelsByPiece() {
         return voxelsByPiece;
     }
-
-//    public List<Transform> getPositionState() {
-//        return positionState;
-//    }
 
     public int getAssemblyNumber() {
         return assemblyNumber;

@@ -272,11 +272,9 @@ public class Importer {
                 for (int k = 0; k < pieceCount; k++) {
                     int piece = pieceIndex.get(k);
                     Vector3f translation = new Vector3f(posX[k], posY[k], posZ[k]);
-                    System.out.println(piece + " " + translation);
                     Transform transform = new Transform(translation);
                     transform.setRotation(previous.get(piece).getRotation());
                     transforms.set(piece, transform);
-                    System.out.println(piece + " " + transform.getTranslation());
                 }
 
                 if (!transforms.equals(previous)) {
