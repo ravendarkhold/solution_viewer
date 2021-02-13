@@ -157,15 +157,14 @@ public class Importer {
                 List<int[][][]> voxelsByPiece = getVoxelsByPiece(shapes, shapesInProblem, assembly);
 
                 List<Transform> piecePosition = getPiecePositions(assembly);
-                List<Transform> positionState = piecePosition.stream().filter(Objects::nonNull).collect(Collectors.toList());
 
                 int assemblyNumber = getIntegerAttribute(solution, "asmNum");
                 int solutionNumber = getIntegerAttribute(solution, "solNum");
 
-                result.add(new Assembly(assemblyNumber, solutionNumber, voxelsByPiece, positionState, loadMoves(solution, piecePosition)));
+                result.add(new Assembly(assemblyNumber, solutionNumber, voxelsByPiece, loadMoves(solution, piecePosition)));
             }
         }
-        if (result.stream().allMatch(a -> a.getMoves().isEmpty())) {
+        if (result.stream().allMatch(a -> a.getPiecePositionsByMove().isEmpty())) {
             Assembly assembly = loadAssemblyGeneratedByAndrew(result, solutions);
             result.add(assembly);
         }
@@ -184,7 +183,7 @@ public class Importer {
                 positions.add(getPiecePositions(assembly).stream().map(t -> t != null ? t : new Transform(new Vector3f(100, 100, 100))).collect(Collectors.toList()));
             }
         }
-        Assembly assembly = new Assembly(1, 1, voxelsByPiece, positions.get(0), positions);
+        Assembly assembly = new Assembly(1, 1, voxelsByPiece, positions);
         return assembly;
     }
 

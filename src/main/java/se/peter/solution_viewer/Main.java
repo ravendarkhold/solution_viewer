@@ -30,19 +30,20 @@ import java.util.logging.Logger;
 import java.util.stream.IntStream;
 
 import static java.lang.Math.floor;
+import static java.lang.Math.round;
 
 public class Main extends SimpleApplication {
     public float moveSpeed = 1f;
     private final File file;
     private List<List<Transform>> moves;
+    private Assembly assembly;
+    private List<Node> pieceNodes;
+    private BitmapText moveText;
+    private State state = State.PAUSED;
     private float time = 0;
     private int direction = 1;
     private int currentMoveIndex;
-    private Assembly assembly;
-    private List<Node> pieceNodes;
-    private boolean running = false;
-    private int pauseAt;
-    private BitmapText moveText;
+    private int stepTo;
 
     public Main(File file) {
         this.file = file;
@@ -91,13 +92,13 @@ public class Main extends SimpleApplication {
         System.out.println("Assembly " + assembly.getAssemblyNumber() + ", solution " + assembly.getSolutionNumber());
 
         int pieceCount = assembly.getVoxelsByPiece().size();
-        moves = assembly.getMoves();
+        moves = assembly.getPiecePositionsByMove();
 
-//        moves.forEach(m -> {
-//            System.out.println("--------");
-//            for (int i = 0; i < assembly.getVoxelsByPiece().size(); i++)
-//                System.out.println(m.get(i).getTranslation());
-//        });
+        moves.forEach(m -> {
+            System.out.println("--------");
+            for (int i = 0; i < assembly.getVoxelsByPiece().size(); i++)
+                System.out.println(m.get(i).getTranslation());
+        });
 
         pieceNodes = new ArrayList<>();
         ColorRGBA[] colors = IntStream.range(0, pieceCount).mapToObj(i -> ColorRGBA.randomColor()).toArray(ColorRGBA[]::new);
@@ -129,7 +130,7 @@ public class Main extends SimpleApplication {
                     }
             rootNode.attachChild(pieceNode);
 
-            pieceNode.setLocalTransform(assembly.getPositionState().get(pieceNumber - 1));
+            pieceNode.setLocalTransform(assembly.getPiecePositionsByMove().get(0).get(pieceNumber - 1));
         }
         viewPort.setBackgroundColor(ColorRGBA.White);
 
@@ -141,12 +142,10 @@ public class Main extends SimpleApplication {
 
         attachCoordinateAxes(rootNode);
 
-        pauseAt = moves.size() - 1;
-
         guiFont = assetManager.loadFont("Interface/Fonts/Default.fnt");
         moveText = new BitmapText(guiFont, false);
         moveText.setSize(guiFont.getCharSet().getRenderedSize());
-        moveText.setText("");
+        showMoveIndex();
         moveText.setLocalTranslation(500, moveText.getLineHeight(), 0);
         moveText.setColor(ColorRGBA.Black);
         guiNode.attachChild(moveText);
@@ -181,32 +180,29 @@ public class Main extends SimpleApplication {
     private void setupControls() {
         addKeyAction(KeyInput.KEY_SPACE, (name, isPressed, tpf) -> {
             if (!isPressed) {
-                running = !running;
-                pauseAt = direction > 0 ? moves.size() : -1;
+                state = (state == State.RUNNING) ? State.PAUSED : State.RUNNING;
             }
         });
 
         addKeyAction(KeyInput.KEY_RIGHT, (name, isPressed, tpf) -> {
             if (!isPressed) {
-                running = true;
-                direction = 1;
-                if (currentMoveIndex < moves.size() - 1) {
-                    pauseAt = currentMoveIndex + 1;
+                if (state == State.STEPPING && direction > 0) {
+                    stepTo++;
                 } else {
-                    time = 0;
-                    pauseAt = 1;
+                    state = State.STEPPING;
+                    direction = 1;
+                    stepTo = currentMoveIndex + 1;
                 }
             }
         });
         addKeyAction(KeyInput.KEY_LEFT, (name, isPressed, tpf) -> {
             if (!isPressed) {
-                running = true;
-                direction = -1;
-                if (currentMoveIndex > 0) {
-                    pauseAt = currentMoveIndex - 1;
+                if (state == State.STEPPING && direction < 0) {
+                    stepTo--;
                 } else {
-                    time = (moves.size() - 1) / speed;
-                    pauseAt = moves.size() - 2;
+                    state = State.STEPPING;
+                    direction = -1;
+                    stepTo = currentMoveIndex - 1;
                 }
             }
         });
@@ -216,7 +212,7 @@ public class Main extends SimpleApplication {
                 moveSpeed *= 1.5;
             }
         });
-        addKeyAction(KeyInput.KEY_LEFT, (name, isPressed, tpf) -> {
+        addKeyAction(KeyInput.KEY_DOWN, (name, isPressed, tpf) -> {
             if (!isPressed) {
                 moveSpeed /= 1.5;
             }
@@ -230,43 +226,68 @@ public class Main extends SimpleApplication {
     }
 
     private void movePieces(int moveIndex, float fraction) {
-        if (moveIndex < moves.size()) {
-            for (int piece = 0; piece < assembly.getVoxelsByPiece().size(); piece++) {
-                Transform t0;
-                if (moveIndex > 0) {
-                    t0 = moves.get(moveIndex - 1).get(piece);
-                } else {
-                    t0 = assembly.getPositionState().get(piece);
-                }
-                Transform t1 = moves.get(moveIndex).get(piece);
+        for (int piece = 0; piece < assembly.getVoxelsByPiece().size(); piece++) {
+            Quaternion q;
+            Vector3f t;
+            if (fraction > 0.0) {
+                Transform t0 = moves.get(moveIndex).get(piece);
+                Transform t1 = moves.get(moveIndex + 1).get(piece);
 
-                Node node = pieceNodes.get(piece);
-
-                Quaternion q = new Quaternion();
+                q = new Quaternion();
                 q.slerp(t0.getRotation(), t1.getRotation(), fraction);
 
-                Vector3f t = new Vector3f();
+                t = new Vector3f();
                 t.interpolateLocal(t0.getTranslation(), t1.getTranslation(), fraction);
-                node.setLocalRotation(q);
-                node.setLocalTranslation(t);
+            } else {
+                q = moves.get(moveIndex).get(piece).getRotation();
+                t = moves.get(moveIndex).get(piece).getTranslation();
             }
+            Node node = pieceNodes.get(piece);
+            node.setLocalRotation(q);
+            node.setLocalTranslation(t);
         }
     }
 
     @Override
     public void simpleUpdate(float tpf) {
-        if (running) {
+        if (state != State.PAUSED) {
             time += tpf * direction;
-            int moveIndex = (int) floor(time * moveSpeed);
-            if (moveIndex == pauseAt) {
-                running = false;
-            } else {
-                movePieces(moveIndex, (time * moveSpeed - moveIndex));
-            }
-            currentMoveIndex = moveIndex;
-            moveText.setText("Move: " + currentMoveIndex);
-        }
+            int moveIndex = (int) round(floor(time * moveSpeed));
 
+            if (state == State.STEPPING && direction > 0.0 && moveIndex >= stepTo) {
+                moveIndex = stepTo;
+                state = State.PAUSED;
+                time = stepTo / moveSpeed;
+            } else if (state == State.STEPPING && direction < 0.0 && moveIndex < stepTo) {
+                state = State.PAUSED;
+                time = stepTo / moveSpeed;
+                moveIndex = stepTo;
+            }
+
+            if (moveIndex < 0) {
+                time = 0.0f;
+                moveIndex = 0;
+                state = State.PAUSED;
+            } else if (moveIndex >= moves.size() - 1) {
+                time = (moves.size() - 1) / moveSpeed;
+                moveIndex = moves.size() - 1;
+                state = State.PAUSED;
+            }
+
+            float fraction = time * moveSpeed - moveIndex;
+            movePieces(moveIndex, fraction);
+
+            if (moveIndex != currentMoveIndex) {
+                currentMoveIndex = moveIndex;
+                showMoveIndex();
+            } else {
+                currentMoveIndex = moveIndex;
+            }
+        }
+    }
+
+    private void showMoveIndex() {
+        moveText.setText("Move " + (currentMoveIndex + 1));
     }
 
     private void putShape(Node n, Mesh shape, ColorRGBA color) {
@@ -289,5 +310,9 @@ public class Main extends SimpleApplication {
 
         arrow = new Arrow(Vector3f.UNIT_Z);
         putShape(n, arrow, ColorRGBA.Blue);
+    }
+
+    private static enum State {
+        PAUSED, RUNNING, STEPPING;
     }
 }
