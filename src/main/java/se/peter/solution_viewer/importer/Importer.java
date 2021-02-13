@@ -161,7 +161,8 @@ public class Importer {
                 int assemblyNumber = getIntegerAttribute(solution, "asmNum");
                 int solutionNumber = getIntegerAttribute(solution, "solNum");
 
-                result.add(new Assembly(assemblyNumber, solutionNumber, voxelsByPiece, loadMoves(solution, piecePosition)));
+                List<List<Transform>> moves = loadMoves(solution, piecePosition.stream().map(t -> new Transform().setRotation(t.getRotation())).collect(Collectors.toList()));
+                result.add(new Assembly(assemblyNumber, solutionNumber, voxelsByPiece, moves));
             }
         }
         if (result.stream().allMatch(a -> a.getPiecePositionsByMove().isEmpty())) {
@@ -270,16 +271,19 @@ public class Importer {
                 List<Transform> transforms = new ArrayList<>(previous);
                 for (int k = 0; k < pieceCount; k++) {
                     int piece = pieceIndex.get(k);
-                    Transform transform = new Transform(new Vector3f(posX[k], posY[k], posZ[k]));
+                    Vector3f translation = new Vector3f(posX[k], posY[k], posZ[k]);
+                    System.out.println(piece + " " + translation);
+                    Transform transform = new Transform(translation);
                     transform.setRotation(previous.get(piece).getRotation());
                     transforms.set(piece, transform);
+                    System.out.println(piece + " " + transform.getTranslation());
                 }
 
                 if (!transforms.equals(previous)) {
                     moves.add(transforms.stream().filter(Objects::nonNull).collect(Collectors.toList()));
                     previous = transforms;
                 }
-            } else if (child.getNodeName().equals("separation")) {
+            } else if (child.getNodeName().equals("separation") && child.getAttributes().getNamedItem("type").getNodeValue().equals("left")) {
                 moves.addAll(parseSeparation(child, previous));
             }
         }

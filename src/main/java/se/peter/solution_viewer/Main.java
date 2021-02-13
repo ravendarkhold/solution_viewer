@@ -94,11 +94,13 @@ public class Main extends SimpleApplication {
         int pieceCount = assembly.getVoxelsByPiece().size();
         moves = assembly.getPiecePositionsByMove();
 
-        moves.forEach(m -> {
-            System.out.println("--------");
-            for (int i = 0; i < assembly.getVoxelsByPiece().size(); i++)
-                System.out.println(m.get(i).getTranslation());
-        });
+//        moves.forEach(m -> {
+//            System.out.println("--------");
+//            for (int i = 0; i < assembly.getVoxelsByPiece().size(); i++) {
+//                Transform transform = m.get(i);
+//                System.out.println("Piece " + i + " " + transform.getTranslation() + " " + transform.getRotation());
+//            }
+//        });
 
         pieceNodes = new ArrayList<>();
         ColorRGBA[] colors = IntStream.range(0, pieceCount).mapToObj(i -> ColorRGBA.randomColor()).toArray(ColorRGBA[]::new);
