@@ -6,7 +6,6 @@ import com.jme3.input.ChaseCamera;
 import com.jme3.input.KeyInput;
 import com.jme3.input.controls.ActionListener;
 import com.jme3.input.controls.KeyTrigger;
-import com.jme3.light.DirectionalLight;
 import com.jme3.material.Material;
 import com.jme3.material.RenderState;
 import com.jme3.math.ColorRGBA;
@@ -24,11 +23,13 @@ import se.peter.solution_viewer.puzzle.Assembly;
 
 import java.awt.*;
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.logging.FileHandler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.stream.IntStream;
 
 import static java.lang.Math.floor;
 import static java.lang.Math.round;
@@ -53,7 +54,7 @@ public class Main extends SimpleApplication {
     }
 
     public static void main(String[] args) {
-        Logger.getLogger("").setLevel(Level.OFF);
+        setupLogging();
 
         if (args.length != 1) {
             System.err.println("Usage: java -jar target\\solution-viewer-1.0-SNAPSHOT-jar-with-dependencies.jar <xmpuzzle file>");
@@ -84,11 +85,31 @@ public class Main extends SimpleApplication {
         app.start();
     }
 
+    private static void setupLogging() {
+        Arrays.stream(Logger.getLogger("").getHandlers()).forEach(h -> Logger.getLogger("").removeHandler(h));
+
+        try {
+            Logger.getLogger("").addHandler(new FileHandler("solution_viewer.log"));
+        } catch (IOException e) {
+            System.err.println("Error setting up file logging.");
+            System.exit(1);
+        }
+
+        Logger.getLogger("").setLevel(Level.WARNING);
+    }
+
     @Override
     public void simpleInitApp() {
         Importer importer = new Importer();
 
-        List<Assembly> assemblies = importer.loadAssemblies(file);
+        List<Assembly> assemblies = null;
+        try {
+            assemblies = importer.loadAssemblies(file);
+        } catch (Exception e) {
+            System.err.println("Error loading solution file " + file.getAbsolutePath());
+            e.printStackTrace();
+            System.exit(1);
+        }
 
         assembly = assemblies.get(assemblies.size() - 1);
         System.out.println("Assembly " + assembly.getAssemblyNumber() + ", solution " + assembly.getSolutionNumber());
@@ -108,17 +129,15 @@ public class Main extends SimpleApplication {
         }
 
         pieceNodes = new ArrayList<>();
-        ColorRGBA[] colors = IntStream.range(0, pieceCount).mapToObj(i -> ColorRGBA.randomColor()).toArray(ColorRGBA[]::new);
         List<Transform> initialPositions = assembly.getPiecePositionsByMove().get(0);
 
         for (int pieceNumber = 1; pieceNumber <= pieceCount; pieceNumber++) {
-            Node pieceNode = createPiece(voxelsByPiece.get(pieceNumber - 1), colors[pieceNumber - 1], initialPositions.get(pieceNumber - 1));
+            Node pieceNode = createPiece(voxelsByPiece.get(pieceNumber - 1), initialPositions.get(pieceNumber - 1));
             pieceNodes.add(pieceNode);
             rootNode.attachChild(pieceNode);
         }
 
         viewPort.setBackgroundColor(ColorRGBA.White);
-        addLights();
         setupControls();
         setupCamera();
 
@@ -139,18 +158,13 @@ public class Main extends SimpleApplication {
         rootNode.attachChild(guiNode);
     }
 
-    private Node createPiece(int[][][] piece, ColorRGBA color, Transform initialPosition) {
+    private Node createPiece(int[][][] piece, Transform initialPosition) {
         Node pieceNode = new Node();
 
-        Material mat = new Material(assetManager, "Common/MatDefs/Light/Lighting.j3md");
-        mat.setTexture("DiffuseMap", assetManager.loadTexture("Pond.jpg"));
-        mat.setTexture("NormalMap", assetManager.loadTexture("Pond_normal.png"));
-        mat.setBoolean("UseMaterialColors", true);
-        mat.setColor("Diffuse", color);
-        mat.setColor("Specular", ColorRGBA.White);
-        mat.setFloat("Shininess", 0f);  // [0,128]
+        Material mat = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
+        mat.setTexture("ColorMap", assetManager.loadTexture("WM_IndoorWood-44_1024.png"));
+        mat.setColor("Color", ColorRGBA.randomColor());
 
-        //  mat.getAdditionalRenderState().setWireframe(true);
         for (int x = 0; x < piece.length; x++)
             for (int y = 0; y < piece[0].length; y++)
                 for (int z = 0; z < piece[0][0].length; z++) {
@@ -167,18 +181,6 @@ public class Main extends SimpleApplication {
 
         pieceNode.setLocalTransform(initialPosition);
         return pieceNode;
-    }
-
-    private void addLights() {
-        DirectionalLight sun = new DirectionalLight();
-        sun.setDirection(new Vector3f(1, 1, 1).normalizeLocal());
-        sun.setColor(ColorRGBA.White);
-        rootNode.addLight(sun);
-
-        DirectionalLight sun2 = new DirectionalLight();
-        sun2.setDirection(new Vector3f(-1, -1, -1).normalizeLocal());
-        sun2.setColor(ColorRGBA.White);
-        rootNode.addLight(sun2);
     }
 
     private void setupCamera() {

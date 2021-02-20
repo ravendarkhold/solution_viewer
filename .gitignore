@@ -3,3 +3,5 @@ out
 target
 *.dll
 *.iml
+/dependency-reduced-pom.xml
+/solution_viewer.log

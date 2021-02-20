@@ -161,7 +161,9 @@ public class Importer {
                 int assemblyNumber = getIntegerAttribute(solution, "asmNum");
                 int solutionNumber = getIntegerAttribute(solution, "solNum");
 
-                List<List<Transform>> moves = loadMoves(solution, piecePosition.stream().map(t -> new Transform().setRotation(t.getRotation())).collect(Collectors.toList()));
+                List<List<Transform>> moves = loadMoves(solution, piecePosition.stream()
+                        .map(t -> t != null ? new Transform().setRotation(t.getRotation()) : null)
+                        .collect(Collectors.toList()));
                 result.add(new Assembly(assemblyNumber, solutionNumber, voxelsByPiece, moves));
             }
         }
